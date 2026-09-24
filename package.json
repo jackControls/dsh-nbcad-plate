@@ -1,0 +1,33 @@
+{
+  "name": "dsh-nbcad-plate",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: turn 2D plate prints into noBS CAD scripts and STEP files. Registers the plate workflow as a skill and two headless CAD tools.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "python",
+    "skill",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "keywords": ["dsh", "dsh-plugin", "deepseek-harness", "cad", "nobs-cad", "step"],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0",
+    "@deepseek-ai/dsh-skill": ">=0.1.0",
+    "@deepseek-ai/schemastery": ">=3.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

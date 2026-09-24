@@ -1,0 +1,14 @@
+# dsh-nbcad-plate bundle patch: mounted automatically when this package is
+# installed into a profile (`dsh plugin --profile <name> add <path>`).
+#
+# Point `server` at the headless noBS CAD MCP executable (nbcad-mcp), or set
+# NBCAD_MCP in the environment. Override in the profile's own cordis.patch.yml:
+#
+#   - insert:
+#       - id: nbcad-plate
+#         name: 'dsh-nbcad-plate'
+#         config:
+#           server: /absolute/path/to/nbcad-mcp
+- insert:
+    - id: nbcad-plate
+      name: 'dsh-nbcad-plate'
