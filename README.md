@@ -17,6 +17,11 @@ It registers:
     holes found, or the failing step and reason;
   - `nbcad_inspect_step(step_path)`: re-import a STEP file and return the same
     summary, for verification;
+  - `nbcad_print_probe(action, pdf_path, length_mm, width_mm, ...)`: the native
+    pixel toolkit (Rust, `native/print-probe`): `calibrate`, `crop` with a
+    millimetre grid and hole overlay, `ring-score` (what is drawn at or near
+    each model hole), `symbols` (circles and dots found in a region, matched
+    against the model). Well under a second per call, renders cached;
   - `nbcad_overlay_print(pdf_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`:
     draw the model's holes onto the plan view of the print (whole page, or a
     high-resolution crop of a millimetre window) so every group can be checked
@@ -36,6 +41,12 @@ interpreter; there is no second modelling path.
 
 ## Install
 
+Build the native probe once (Rust toolchain, offline-capable):
+
+```bash
+cargo build --release --manifest-path native/print-probe/Cargo.toml
+```
+
 ```bash
 dsh --profile nbcad --from-default-profile headless --dump-config >/dev/null
 dsh plugin --profile nbcad add file:/path/to/dsh-nbcad-plate
@@ -48,7 +59,11 @@ Then point the plugin at the engine in the profile's `cordis.patch.yml`
 - id: nbcad-plate
   config:
     server: /path/to/noBS-CAD/target/debug/nbcad-mcp
+    probe: /path/to/dsh-nbcad-plate/native/print-probe/target/release/print-probe
 ```
+
+`probe` is needed because the profile holds a copy of the package without the
+build directory; `NBCAD_PRINT_PROBE` in the environment works as well.
 
 `NBCAD_MCP` in the environment works as well. Check with
 `dsh --profile nbcad --dump-config` that the `nbcad-plate` entry is mounted.
@@ -77,6 +92,7 @@ python/mcp_client.py     minimal newline JSON-RPC client for nbcad-mcp
 skill/SKILL.md           the workflow (also usable as a plain filesystem skill)
 skill/plate-example.nbcad.jsonc   validated example with every idiom
 tools/make_example.py    regenerates and validates the example
+native/print-probe/      Rust pixel toolkit behind nbcad_print_probe
 cordis.patch.yml         bundle patch that mounts the plugin
 ```
 

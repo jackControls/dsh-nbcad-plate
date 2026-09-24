@@ -22,6 +22,17 @@ how many script runs you allow yourself.
   blue = counterbore, green = the plate outline it calibrated on) and writes a
   PNG; with `region: "x0,y0,x1,y1"` in millimetres it writes a 400 dpi crop of
   that window. View the PNG with your image tool.
+- `nbcad_print_probe(action, pdf_path, length_mm, width_mm, ...)` is the fast
+  native pixel toolkit (under a second per call, so use it freely instead of
+  writing your own pixel scripts): `crop` writes a millimetre window with a
+  10 mm tick grid, so a position can be read off the ticks; `ring-score` says,
+  for every hole of a STEP, what is drawn at that point or within 2.5 mm
+  (symbol with its centre and offset, dot, dashed, none); `symbols` lists the
+  circles and dots found in a region and which model holes or drawn symbols
+  are unmatched; `calibrate` reports the plate outline and skew. Run
+  `ring-score` after every script run and look at each hole reported with an
+  offset over 1 mm or nothing drawn. Treat `symbols` output as places to look
+  at on a crop, never as positions to model from.
 - The example script `{{SKILL_DIR}}/plate-example.nbcad.jsonc` runs cleanly and
   shows every idiom below. Read it once, then copy its structure and change only
   the numbers and the list of feature steps.
@@ -150,6 +161,9 @@ declare the part done while a callout group is absent.
 - Holes by diameter match the inventory (tap-drill diameters for threads);
   counterbores match; edge holes counted in the cylindrical faces.
 - `nbcad_inspect_step` on the exported STEP gives the same numbers.
+- Probe check after every script run: `nbcad_print_probe` with `ring-score`;
+  every hole must come back as symbol, dot or dashed with an offset under 1 mm.
+  Then `symbols` on the whole plate: every print_only entry is a spot to view.
 - Overlay check, mandatory before the report: run `nbcad_overlay_print` for the
   whole plate and view it, then run it with a `region` of roughly 250 × 200 mm
   for every part of the plate that holds holes and view each crop. Every red
