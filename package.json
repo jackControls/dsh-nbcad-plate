@@ -1,7 +1,7 @@
 {
   "name": "dsh-nbcad-plate",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness plugin: turn 2D plate prints into noBS CAD scripts and STEP files. Registers the plate workflow as a skill and two headless CAD tools.",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness plugin: turn 2D plate prints into noBS CAD scripts and STEP files. Registers the plate workflow as a skill, two headless CAD tools and a print-overlay check.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

@@ -17,6 +17,11 @@ how many script runs you allow yourself.
   holes it finds (x, y from the lower-left corner, diameter, counterbore). On
   failure it returns the failing step and the reason.
 - `nbcad_inspect_step(step_path)` re-imports a STEP and returns the same summary.
+- `nbcad_overlay_print(pdf_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`
+  draws the holes of a STEP file onto the plan view of the print (red = hole,
+  blue = counterbore, green = the plate outline it calibrated on) and writes a
+  PNG; with `region: "x0,y0,x1,y1"` in millimetres it writes a 400 dpi crop of
+  that window. View the PNG with your image tool.
 - The example script `{{SKILL_DIR}}/plate-example.nbcad.jsonc` runs cleanly and
   shows every idiom below. Read it once, then copy its structure and change only
   the numbers and the list of feature steps.
@@ -26,6 +31,12 @@ how many script runs you allow yourself.
   6.60 can look like 6 60). Pixel measurement is for disambiguation only, never a
   substitute for a printed number, and the title-block scale must not be used to
   measure anything.
+- A hole position comes from a printed dimension, or from the drawn hole symbol
+  (a small circle with a crosshair, or an X-marked circle for a tapped hole)
+  that you have seen on a crop at that spot. Never take positions from a circle
+  detector or a script you wrote over the raster without looking: digits,
+  characters, arrowheads and the ends of leaders are ring-shaped too, and a hole
+  placed on a callout's text is the most common error on dense prints.
 
 ## 1. Survey the sheet
 
@@ -139,6 +150,15 @@ declare the part done while a callout group is absent.
 - Holes by diameter match the inventory (tap-drill diameters for threads);
   counterbores match; edge holes counted in the cylindrical faces.
 - `nbcad_inspect_step` on the exported STEP gives the same numbers.
+- Overlay check, mandatory before the report: run `nbcad_overlay_print` for the
+  whole plate and view it, then run it with a `region` of roughly 250 × 200 mm
+  for every part of the plate that holds holes and view each crop. Every red
+  circle must sit on a drawn hole symbol and every drawn hole symbol must carry
+  a red circle; a red circle on blank paper, on text, or beside a symbol is a
+  wrong position, and a symbol without a red circle is a missing or misplaced
+  hole. Fix the script, run it again and repeat the overlay until every crop is
+  clean. The count matching the inventory does not prove the positions; only
+  the overlay does.
 - Report per group: id, callout, count, diameter, style, face, positions, the
   chain used, and certainty. Then the left-out list (fillets, chamfers, edge
   breaks, finish, tolerances, GD&T) and every uncertain reading with the

@@ -11,12 +11,16 @@ It registers:
   inventory, corner-origin frame, chain arithmetic, one script per part,
   verification by hole counts, report), with a validated example script that
   shows every modelling idiom (`skill/plate-example.nbcad.jsonc`);
-- two tools that drive a headless noBS CAD engine:
+- three tools that drive a headless noBS CAD engine and the print:
   - `nbcad_run_script(script_path, step_path)`: run a version 1 `.nbcad.jsonc`
     script in a blank document, export STEP, return the scene summary and the
     holes found, or the failing step and reason;
   - `nbcad_inspect_step(step_path)`: re-import a STEP file and return the same
-    summary, for verification.
+    summary, for verification;
+  - `nbcad_overlay_print(pdf_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`:
+    draw the model's holes onto the plan view of the print (whole page, or a
+    high-resolution crop of a millimetre window) so every group can be checked
+    against the drawn hole symbols.
 
 The model reads the print itself (its own image reads and `pdftoppm` crops),
 writes the script, runs it, compares the hole list with its inventory and fixes
@@ -67,6 +71,7 @@ runs.
 lib/index.js             plugin entry: registers the skill and the two tools
 python/run_script.py     run a script through nbcad-mcp and export STEP (--json)
 python/inspect_step.py   re-import a STEP file and summarise it (--json)
+python/overlay_print.py  draw a model's holes on the print for a visual check (--json)
 python/cad.py            engine session helpers (scene summary, hole extraction)
 python/mcp_client.py     minimal newline JSON-RPC client for nbcad-mcp
 skill/SKILL.md           the workflow (also usable as a plain filesystem skill)
