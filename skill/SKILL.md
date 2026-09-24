@@ -133,7 +133,9 @@ Structure = the example. Idioms, all present in the example:
   "basis": {"$ref": "<face>", "pointer": "/plane"}}}` where z = T on the top
   face and 0 on the bottom; on a side face project the point on that face, for
   example `[x, 0, z]` on the y = 0 edge. One call per callout group: the first
-  point in `position`, all points repeated in `positions`. Styles: through
+  point in `position`, and every point of the group, the first one included,
+  in `positions`; when `positions` is present only its points are drilled, so
+  a first point left out of it is lost silently (`ring-score` shows it). Styles: through
   `extent {"type": "through_all"}` and `style "simple"`; counterbore
   `style "counterbore"` with `counterbore_diameter` and `counterbore_depth`;
   blind `extent {"type": "distance", "depth": h}`; tapped = tap-drill diameter,
