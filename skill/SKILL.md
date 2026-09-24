@@ -159,6 +159,15 @@ declare the part done while a callout group is absent.
   hole. Fix the script, run it again and repeat the overlay until every crop is
   clean. The count matching the inventory does not prove the positions; only
   the overlay does.
+- A hole symbol is a circle drawn on its own centrelines, with a crosshair or
+  an X. The arrowhead of a dimension line sitting on a centreline, a leader's
+  arrowhead, and the crossing of two lines are not symbols, whatever an ink
+  score says; judge every doubtful spot by eye on a 600 dpi crop.
+- Assign each symbol to its callout by the leader: the arrowhead identifies one
+  member of the group, and the printed pattern dimensions (pitch, spacing,
+  bolt circle) give the others. Never assign by nearness to the callout text,
+  and never leave a symbol as "no callout found" while a callout group is short
+  of members.
 - Report per group: id, callout, count, diameter, style, face, positions, the
   chain used, and certainty. Then the left-out list (fillets, chamfers, edge
   breaks, finish, tolerances, GD&T) and every uncertain reading with the
