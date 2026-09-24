@@ -104,7 +104,7 @@ fn render(pdf: &str, dpi: u32, page: u32, crop: Option<(i64, i64, i64, i64)>) ->
 
 // ----------------------------------------------------------------------------- calibration
 
-const CAL_DPI: u32 = 150;
+const CAL_DPI: u32 = 300;
 
 #[derive(Clone, Debug)]
 struct Cal {
@@ -191,49 +191,220 @@ fn peaks(counts: &[usize], lo: usize, hi: usize, n: usize, gap: usize) -> Vec<us
     chosen
 }
 
+/// Fraction of the pixels along a horizontal (or vertical) segment that are dark within +-2 px.
+fn side_support(g: &Gray, fixed: usize, from: usize, to: usize, horizontal: bool) -> f64 {
+    let (lo, hi) = (from.min(to), from.max(to));
+    side_support_band(g, fixed, lo, hi, horizontal, 2 + ((hi - lo) as f64 * 0.009) as i64)
+}
+
+/// Same, with an explicit +-band in px (a scan can be rotated by half a degree, so a short
+/// segment of a long side needs the long side's band).
+fn side_support_band(g: &Gray, fixed: usize, lo: usize, hi: usize, horizontal: bool, band: i64) -> f64 {
+    if hi <= lo {
+        return 0.0;
+    }
+    let mut dark = 0;
+    for t in lo..=hi {
+        let mut hit = false;
+        for d in -band..=band {
+            let (x, y) = if horizontal { (t as i64, fixed as i64 + d) } else { (fixed as i64 + d, t as i64) };
+            if g.at(x, y) < 110 {
+                hit = true;
+                break;
+            }
+        }
+        if hit {
+            dark += 1;
+        }
+    }
+    dark as f64 / (hi - lo + 1) as f64
+}
+
+/// Median stroke width (px) of a horizontal or vertical line at `fixed`, sampled along lo..hi
+/// every 8 px: the perpendicular dark run through the nearest dark pixel within +-band.
+fn stroke_width(g: &Gray, fixed: usize, lo: usize, hi: usize, horizontal: bool, band: i64) -> f64 {
+    let mut widths: Vec<i64> = Vec::new();
+    let mut t = lo;
+    while t <= hi {
+        let mut found: Option<i64> = None;
+        for d in -band..=band {
+            let (x, y) = if horizontal { (t as i64, fixed as i64 + d) } else { (fixed as i64 + d, t as i64) };
+            if g.at(x, y) < 110 {
+                found = Some(fixed as i64 + d);
+                break;
+            }
+        }
+        if let Some(c) = found {
+            let (mut a, mut b) = (c, c);
+            let px = |p: i64| if horizontal { g.at(t as i64, p) } else { g.at(p, t as i64) };
+            while px(a - 1) < 110 && c - a < 40 {
+                a -= 1;
+            }
+            while px(b + 1) < 110 && b - c < 40 {
+                b += 1;
+            }
+            widths.push(b - a + 1);
+        }
+        t += 8;
+    }
+    if widths.is_empty() {
+        return 0.0;
+    }
+    widths.sort();
+    widths[widths.len() / 2] as f64
+}
+
+/// Support of a side measured with a small band, so only a candidate row/column that really
+/// sits on the line scores; for long sides the band grows a little with skew.
+fn tight_support(g: &Gray, fixed: usize, lo: usize, hi: usize, horizontal: bool) -> f64 {
+    side_support_band(g, fixed, lo, hi, horizontal, 3 + ((hi - lo) as f64 * 0.003) as i64)
+}
+
+/// Find the plate outline on the sheet.
+/// Candidate lines are the strongest vertical and horizontal ink lines away from the page
+/// border (the drawing frame). A candidate rectangle pairs two of each with the span ratio
+/// width/length within 3 %; its vertical sides must be drawn over their length and its
+/// horizontal sides at least at the ends (a notched outline still has those), and its strokes
+/// must have visible-line weight (about 4 px at 300 dpi; dimension lines and table rules are
+/// about 2.5 px). Rectangles in the title-block corner (bottom right) are skipped. Among the
+/// survivors the strongest lines win, which is the main view.
 fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
     let g = render(pdf, CAL_DPI, page, None);
     let (rows, cols) = dark_counts(&g, 0, g.w, 0, g.h, 110);
-    let (mx, my) = ((g.w as f64 * 0.05) as usize, (g.h as f64 * 0.05) as usize);
-    let xc = peaks(&cols, mx, g.w - mx, 8, 12);
-    let yc = peaks(&rows, my, g.h - my, 10, 8);
-    let mut best: Option<(usize, usize, usize, usize, usize)> = None;
+    let (mx, my) = ((g.w as f64 * 0.06) as usize, (g.h as f64 * 0.06) as usize);
+    let xc = peaks(&cols, mx, g.w - mx, 48, 6);
+    let yc = peaks(&rows, my, g.h - my, 48, 6);
+    let target = width / length;
+    let debug = std::env::var("PROBE_DEBUG").is_ok();
+    let expect: Option<Vec<usize>> = std::env::var("PROBE_EXPECT").ok().map(|e| e.split(',').map(|t| t.trim().parse().unwrap()).collect());
+    let hint: Option<(f64, f64, f64, f64)> = std::env::var("PROBE_HINT").ok().map(|h| {
+        let v: Vec<f64> = h.split(',').map(|t| t.trim().parse().unwrap()).collect();
+        (v[0], v[1], v[2], v[3])
+    });
+    // (strength, span, x0, x1, y0, y1, thinnest, median width)
+    let mut cands: Vec<(f64, f64, usize, usize, usize, usize, f64, f64)> = Vec::new();
     for i in 0..xc.len() {
         for j in i + 1..xc.len() {
-            let span_x = xc[j] - xc[i];
-            if (span_x as f64) < g.w as f64 * 0.25 {
+            let (x0, x1) = (xc[i], xc[j]);
+            let span_x = (x1 - x0) as f64;
+            if span_x < g.w as f64 * 0.06 {
                 continue;
             }
+            let want = span_x * target;
             for k in 0..yc.len() {
+                let y0 = yc[k];
                 for l in k + 1..yc.len() {
-                    let span_y = yc[l] - yc[k];
-                    let err = ((span_y as f64 / span_x as f64) - width / length).abs() / (width / length);
-                    if err < 0.03 {
-                        let score = cols[xc[i]] + cols[xc[j]] + rows[yc[k]] + rows[yc[l]];
-                        if best.map_or(true, |b| score > b.0) {
-                            best = Some((score, xc[i], xc[j], yc[k], yc[l]));
+                    let y1 = yc[l];
+                    let span_y = (y1 - y0) as f64;
+                    if span_y < want * 0.97 {
+                        continue;
+                    }
+                    if span_y > want * 1.03 {
+                        break;
+                    }
+                    let dbg = expect.as_ref().map_or(false, |v| (v[0] as i64 - x0 as i64).abs() <= 6 && (v[1] as i64 - x1 as i64).abs() <= 6 && (v[2] as i64 - y0 as i64).abs() <= 6 && (v[3] as i64 - y1 as i64).abs() <= 6);
+                    if let Some((hx0, hy0, hx1, hy1)) = hint {
+                        let (fx0, fx1, fy0, fy1) = (x0 as f64 / g.w as f64, x1 as f64 / g.w as f64, y0 as f64 / g.h as f64, y1 as f64 / g.h as f64);
+                        if fx0 < hx0 - 0.02 || fx1 > hx1 + 0.02 || fy0 < hy0 - 0.02 || fy1 > hy1 + 0.02 {
+                            if dbg { eprintln!("  expected: outside hint"); }
+                            continue;
+                        }
+                    } else {
+                        // title block: a shallow rectangle in the bottom band of the sheet
+                        let (fy1, fh) = (y1 as f64 / g.h as f64, (y1 - y0) as f64 / g.h as f64);
+                        if fy1 > 0.80 && fh < 0.15 {
+                            if dbg { eprintln!("  expected: in the title-block band"); }
+                            continue;
                         }
                     }
+                    let end = ((span_x * 0.06) as usize).max(8);
+                    // a scan may be rotated by up to half a degree: the ends of a long side sit off the peak row
+                    let skew_band = 3 + (span_x * 0.005) as i64;
+                    let left = tight_support(&g, x0, y0, y1, false);
+                    let right = tight_support(&g, x1, y0, y1, false);
+                    let ends = [
+                        side_support_band(&g, y0, x0, x0 + end, true, skew_band),
+                        side_support_band(&g, y0, x1 - end, x1, true, skew_band),
+                        side_support_band(&g, y1, x0, x0 + end, true, skew_band),
+                        side_support_band(&g, y1, x1 - end, x1, true, skew_band),
+                    ];
+                    // stroke weight from the vertical sides at their middle third, where the peak column is exact
+                    let mid = (y0 + y1) / 2;
+                    let third = ((y1 - y0) / 3).max(4);
+                    let widths = [
+                        stroke_width(&g, x0, mid - third, mid + third, false, 4),
+                        stroke_width(&g, x1, mid - third, mid + third, false, 4),
+                    ];
+                    let mut sorted = [widths[0], widths[1], widths[0], widths[1]];
+                    sorted.sort_by(|p, q| p.partial_cmp(q).unwrap());
+                    let median = (widths[0] + widths[1]) / 2.0;
+                    let strength = (cols[x0] + cols[x1] + rows[y0] + rows[y1]) as f64;
+                    if dbg {
+                        eprintln!("  expected: left {left:.2} right {right:.2} ends {:?} widths {widths:?} median {median} strength {strength}", ends.iter().map(|v| (v * 100.0).round() / 100.0).collect::<Vec<_>>());
+                    }
+                    if left < 0.6 || right < 0.6 || ends.iter().any(|s| *s < 0.5) {
+                        continue;
+                    }
+                    if median < 2.0 || median > 8.0 {
+                        continue;
+                    }
+                    cands.push((strength, span_x, x0, x1, y0, y1, sorted[0], median));
                 }
             }
         }
     }
-    let (_, x0, x1, yt, yb) = best.expect("plate outline not found on the page; check --length/--width");
-    let scale = (x1 - x0) as f64 / length;
-    let band = ((length.min(width) * 0.25 * scale) as usize).max(40);
+    if debug {
+        let mut show = cands.clone();
+        show.sort_by(|p, q| q.0.partial_cmp(&p.0).unwrap());
+        eprintln!("{} candidates; by strength (strength, span, x0, x1, y0, y1, thinnest, median width):", cands.len());
+        for c in show.iter().take(10) {
+            eprintln!("  {:.0} {:.0} {} {} {} {} {:.1} {:.1}", c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7);
+        }
+    }
+    // visible-line weight is relative to the sheet: keep the candidates whose strokes are as thick
+    // as the thickest candidate's (within 20 %), then take the strongest lines among them
+    let max_width = cands.iter().map(|c| c.7).fold(0.0, f64::max);
+    let best = cands
+        .iter()
+        .cloned()
+        .filter(|c| c.7 >= 0.9 * max_width && c.6 >= 0.75 * max_width)
+        .fold(None, |acc: Option<(f64, f64, usize, usize, usize, usize, f64, f64)>, c| match acc {
+            None => Some(c),
+            Some(b) => if c.0 > b.0 { Some(c) } else { Some(b) },
+        });
+    let (_, span_x, x0, x1, yt, yb, _, _) = best.expect("plate outline not found on the page; check --length/--width, or set PROBE_HINT=x0,y0,x1,y1 (page fractions) around the plan view");
+    let scale = span_x / length;
+    let band = ((length.min(width) * 0.25 * scale) as usize).max(20);
+    let inset = (band / 8).max(4);
     let refine_row = |yg: usize, xlo: usize, xhi: usize| -> usize {
-        let (r, _) = dark_counts(&g, xlo, xhi.min(g.w), yg.saturating_sub(12), (yg + 13).min(g.h), 110);
-        (yg.saturating_sub(12)..(yg + 13).min(g.h)).max_by_key(|y| r[*y]).unwrap()
+        let mut best = (0.0, yg);
+        for y in yg.saturating_sub(12)..(yg + 13).min(g.h) {
+            let s = side_support_band(&g, y, xlo, xhi.min(g.w), true, 1);
+            let wdt = stroke_width(&g, y, xlo, xhi.min(g.w), true, 1);
+            let score = s * wdt - 0.01 * (y as f64 - yg as f64).abs();
+            if score > best.0 {
+                best = (score, y);
+            }
+        }
+        best.1
     };
     let refine_col = |xg: usize, ylo: usize, yhi: usize| -> usize {
-        let (_, c) = dark_counts(&g, xg.saturating_sub(12), (xg + 13).min(g.w), ylo, yhi.min(g.h), 110);
-        (xg.saturating_sub(12)..(xg + 13).min(g.w)).max_by_key(|x| c[*x]).unwrap()
+        let mut best = (0.0, xg);
+        for x in xg.saturating_sub(12)..(xg + 13).min(g.w) {
+            let s = side_support_band(&g, x, ylo, yhi.min(g.h), false, 1);
+            let wdt = stroke_width(&g, x, ylo, yhi.min(g.h), false, 1);
+            let score = s * wdt - 0.01 * (x as f64 - xg as f64).abs();
+            if score > best.0 {
+                best = (score, x);
+            }
+        }
+        best.1
     };
-    let tl = (refine_col(x0, yt + 30, yt + 30 + band) as f64, refine_row(yt, x0 + 30, x0 + 30 + band) as f64);
-    let tr = (refine_col(x1, yt + 30, yt + 30 + band) as f64, refine_row(yt, x1 - 30 - band, x1 - 30) as f64);
-    let bl = (refine_col(x0, yb - 30 - band, yb - 30) as f64, refine_row(yb, x0 + 30, x0 + 30 + band) as f64);
-    let br = (refine_col(x1, yb - 30 - band, yb - 30) as f64, refine_row(yb, x1 - 30 - band, x1 - 30) as f64);
-    Cal { dpi: CAL_DPI, tl, tr, bl, br, length, width }
+    let tl = (refine_col(x0, yt + inset, yt + inset + band), refine_row(yt, x0 + inset, x0 + inset + band));
+    let tr = (refine_col(x1, yt + inset, yt + inset + band), refine_row(yt, x1 - inset - band, x1 - inset));
+    let bl = (refine_col(x0, yb - inset - band, yb - inset), refine_row(yb, x0 + inset, x0 + inset + band));
+    let br = (refine_col(x1, yb - inset - band, yb - inset), refine_row(yb, x1 - inset - band, x1 - inset));
+    Cal { dpi: CAL_DPI, tl: (tl.0 as f64, tl.1 as f64), tr: (tr.0 as f64, tr.1 as f64), bl: (bl.0 as f64, bl.1 as f64), br: (br.0 as f64, br.1 as f64), length, width }
 }
 
 // ----------------------------------------------------------------------------- holes json
