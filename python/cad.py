@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mcp_client import McpClient  # noqa: E402
 
-SERVER = os.environ.get("NBCAD_MCP", "/Users/jack/Code/noBS-CAD/.worktrees/feat-plugin-interface/target/debug/nbcad-mcp")
+SERVER = os.environ.get("NBCAD_MCP", "nbcad-mcp")  # the headless noBS CAD MCP executable; a bare name is looked up on PATH
 
 
 def session(log_path):
