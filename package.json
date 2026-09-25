@@ -1,7 +1,7 @@
 {
   "name": "dsh-nbcad-plate",
   "version": "0.3.2",
-  "description": "DeepSeek Harness plugin: turn 2D plate prints into noBS CAD scripts and STEP files. Registers the plate workflow as a skill, two headless CAD tools and a print-overlay check.",
+  "description": "DeepSeek Harness plugin that turns 2D prints of flat plate parts into noBS CAD scripts and STEP files: one skill (the plate workflow) and four tools (run a script and export STEP, inspect a STEP, overlay the model on the print, native print probe for calibrated crops, ring scores and symbol coverage).",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -17,12 +17,27 @@
     "cordis.patch.yml"
   ],
   "license": "MIT",
-  "keywords": ["dsh", "dsh-plugin", "deepseek-harness", "cad", "nobs-cad", "step"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackControls/dsh-nbcad-plate.git"
+  },
+  "homepage": "https://github.com/jackControls/dsh-nbcad-plate#readme",
+  "bugs": {
+    "url": "https://github.com/jackControls/dsh-nbcad-plate/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cad",
+    "nobs-cad",
+    "step"
+  ],
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/dsh-tools": ">=0.1.0",
-    "@deepseek-ai/dsh-skill": ">=0.1.0",
-    "@deepseek-ai/schemastery": ">=3.0.0"
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-skill": "^0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.2"
   },
   "dsh": {
     "bundle": {
