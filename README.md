@@ -32,6 +32,30 @@ writes the script, runs it, compares the hole list with its inventory and fixes
 what is missing. Everything goes through the ordinary noBS CAD script
 interpreter; there is no second modelling path.
 
+## The "2D → 3D" panel in the Web UI
+
+In a `web` profile the plugin adds a **2D → 3D** entry to the sidebar's panel list.
+The panel:
+
+- shows, refreshed every two seconds, whether the noBS CAD engine (`nbcad-mcp`)
+  is reachable, whether a **noBS CAD desktop is running** (read from the desktop's
+  session registry: a `heartbeat.json` newer than 30 seconds under
+  `$TMPDIR/nbcad-sessions/`, the same rule the MCP server uses), whether the
+  native probe is built and whether `pdftoppm` and Python are present;
+- takes one print, either uploaded from the browser (PDF, PNG or JPG) or named by
+  its path on the machine that runs dsh; a raster print is converted to PDF on
+  the host (`sips` on macOS, `img2pdf` or ImageMagick elsewhere) so the probe and
+  the crops work on it;
+- starts a new session in the chosen workspace with the plate-workflow brief,
+  names it after the part, and follows it: the conversation stays one click away;
+- lists every STEP file (and report) the run produces under `<workspace>/out/`
+  and saves it where you choose (**Save STEP as…**, the browser's save dialog
+  where available, otherwise a download).
+
+Nothing here bypasses the model: the panel only prepares the workspace, sends the
+brief and collects the files. The host half serves the panel's routes under
+`/dsh-nbcad/api` on dsh's own web server; headless profiles do not mount them.
+
 ## Requirements
 
 - `dsh` 0.1.5 (release candidates included) with a profile based on `headless`, `tui` or `web`; Node 22 or later.
@@ -42,7 +66,7 @@ interpreter; there is no second modelling path.
 ## Install
 
 From GitHub into a profile of your own (the plugin is plain JavaScript and Python, so
-no build approval is needed):
+no build approval is needed; use `web` instead of `headless` as the template to get the panel):
 
 ```bash
 dsh --profile nbcad --from-default-profile headless --dump-config >/dev/null
