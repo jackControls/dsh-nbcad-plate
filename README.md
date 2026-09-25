@@ -11,7 +11,7 @@ It registers:
   inventory, corner-origin frame, chain arithmetic, one script per part,
   verification by hole counts, report), with a validated example script that
   shows every modelling idiom (`skill/plate-example.nbcad.jsonc`);
-- three tools that drive a headless noBS CAD engine and the print:
+- four tools that drive a headless noBS CAD engine and the print:
   - `nbcad_run_script(script_path, step_path)`: run a version 1 `.nbcad.jsonc`
     script in a blank document, export STEP, return the scene summary and the
     holes found, or the failing step and reason;
@@ -34,22 +34,33 @@ interpreter; there is no second modelling path.
 
 ## Requirements
 
-- `dsh` 0.1.5 or later with a profile based on `headless`, `tui` or `web`.
+- `dsh` 0.1.5 (release candidates included) with a profile based on `headless`, `tui` or `web`; Node 22 or later.
 - A noBS CAD checkout with the MCP server built: `cargo build -p nbcad-mcp`
   (the executable is `target/debug/nbcad-mcp`).
 - Python 3 (standard library only) and `pdftoppm` (poppler) on the PATH.
 
 ## Install
 
-Build the native probe once (Rust toolchain, offline-capable):
-
-```bash
-cargo build --release --manifest-path native/print-probe/Cargo.toml
-```
+From GitHub into a profile of your own (the plugin is plain JavaScript and Python, so
+no build approval is needed):
 
 ```bash
 dsh --profile nbcad --from-default-profile headless --dump-config >/dev/null
+dsh plugin --profile nbcad add github:jackControls/dsh-nbcad-plate
+```
+
+Or from a local checkout:
+
+```bash
 dsh plugin --profile nbcad add file:/path/to/dsh-nbcad-plate
+```
+
+The native print probe behind `nbcad_print_probe` is optional; build it once with a
+Rust toolchain and point the plugin at it (below). Without it the other three tools
+still work and `nbcad_overlay_print` uses its Python renderer.
+
+```bash
+cargo build --release --manifest-path native/print-probe/Cargo.toml
 ```
 
 Then point the plugin at the engine in the profile's `cordis.patch.yml`
@@ -83,7 +94,7 @@ runs.
 ## Layout
 
 ```
-lib/index.js             plugin entry: registers the skill and the two tools
+lib/index.js             plugin entry: registers the skill and the four tools
 python/run_script.py     run a script through nbcad-mcp and export STEP (--json)
 python/inspect_step.py   re-import a STEP file and summarise it (--json)
 python/overlay_print.py  draw a model's holes on the print for a visual check (--json)
