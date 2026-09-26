@@ -52,6 +52,12 @@ The panel:
   and saves it where you choose (**Save STEP as…**, the browser's save dialog
   where available, otherwise a download).
 
+The panel is bilingual (English and Chinese) and follows dsh's global language
+setting (Settings → General → Language, stored as `locale.preference` in
+`settings.yaml`); switching the language re-renders the panel and its sidebar
+entry at once. When the UI is in Chinese the brief also asks the model to answer
+and write `report.md` in Chinese; the script and the field names stay English.
+
 Nothing here bypasses the model: the panel only prepares the workspace, sends the
 brief and collects the files. The host half serves the panel's routes under
 `/dsh-nbcad/api` on dsh's own web server; headless profiles do not mount them.
