@@ -297,6 +297,8 @@ const CAL_DPI: u32 = 300;
 
 #[derive(Clone, Debug)]
 struct Cal {
+    /// Page size in px at `dpi`, for reporting where on the sheet the outline sits.
+    page_px: (usize, usize),
     dpi: u32,
     tl: (f64, f64),
     tr: (f64, f64),
@@ -307,6 +309,15 @@ struct Cal {
 }
 
 impl Cal {
+    /// Millimetres on paper per millimetre of part (1.0 = drawn 1:1), from the render dpi.
+    fn paper_scale(&self) -> f64 {
+        self.px_per_mm() / (self.dpi as f64 / 25.4)
+    }
+    /// The drawing scale the way a title block states it: "1:2" for a part drawn half size.
+    fn scale_ratio(&self) -> String {
+        let s = self.paper_scale();
+        if s < 0.97 { format!("1:{:.1}", 1.0 / s) } else if s > 1.03 { format!("{:.1}:1", s) } else { "1:1".to_string() }
+    }
     fn px_per_mm(&self) -> f64 {
         (self.br.0 - self.bl.0) / self.length
     }
@@ -339,8 +350,10 @@ impl Cal {
     }
     fn json(&self) -> String {
         format!(
-            "{{\"dpi\":{},\"tl\":[{},{}],\"tr\":[{},{}],\"bl\":[{},{}],\"br\":[{},{}],\"px_per_mm\":{:.4},\"skew_deg\":{:.3}}}",
-            self.dpi, self.tl.0, self.tl.1, self.tr.0, self.tr.1, self.bl.0, self.bl.1, self.br.0, self.br.1, self.px_per_mm(), self.skew_deg()
+            "{{\"dpi\":{},\"tl\":[{},{}],\"tr\":[{},{}],\"bl\":[{},{}],\"br\":[{},{}],\"px_per_mm\":{:.4},\"skew_deg\":{:.3},\"outline_page_fraction\":[{:.3},{:.3},{:.3},{:.3}],\"paper_scale\":{:.3},\"scale_ratio\":{},\"check\":\"confirm on your page render that outline_page_fraction (x0,y0,x1,y1 from the top-left corner) is the plan-view outline and that scale_ratio agrees with the title block; if not, the length or width you gave is wrong and every result would be off\"}}",
+            self.dpi, self.tl.0, self.tl.1, self.tr.0, self.tr.1, self.bl.0, self.bl.1, self.br.0, self.br.1, self.px_per_mm(), self.skew_deg(),
+            self.tl.0.min(self.bl.0) / self.page_px.0 as f64, self.tl.1.min(self.tr.1) / self.page_px.1 as f64, self.tr.0.max(self.br.0) / self.page_px.0 as f64, self.bl.1.max(self.br.1) / self.page_px.1 as f64,
+            self.paper_scale(), json_string(&self.scale_ratio())
         )
     }
 }
@@ -476,7 +489,8 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
         for j in i + 1..xc.len() {
             let (x0, x1) = (xc[i], xc[j]);
             let span_x = (x1 - x0) as f64;
-            if span_x < g.w as f64 * 0.06 {
+            // a plate is drawn to fill the sheet; a rectangle under 15 % of the page width is a cell
+            if span_x < g.w as f64 * 0.15 {
                 continue;
             }
             let want = span_x * target;
@@ -572,7 +586,9 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
             None => Some(c),
             Some(b) => if c.0 > b.0 { Some(c) } else { Some(b) },
         });
-    let (_, span_x, x0, x1, yt, yb, _, _) = best.expect("plate outline not found on the page; check --length/--width, or set PROBE_HINT=x0,y0,x1,y1 (page fractions) around the plan view");
+    let (_, span_x, x0, x1, yt, yb, _, _) = best.unwrap_or_else(|| {
+        fail(&format!("plate outline not found on the page for {length} x {width} mm; re-read the outline dimensions (a wrong length or width is the usual cause) or set PROBE_HINT=x0,y0,x1,y1 (page fractions) around the plan view"))
+    });
     let scale = span_x / length;
     let band = ((length.min(width) * 0.25 * scale) as usize).max(20);
     let inset = (band / 8).max(4);
@@ -604,8 +620,9 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
     let tr = (refine_col(x1, yt + inset, yt + inset + band), refine_row(yt, x1 - inset - band, x1 - inset));
     let bl = (refine_col(x0, yb - inset - band, yb - inset), refine_row(yb, x0 + inset, x0 + inset + band));
     let br = (refine_col(x1, yb - inset - band, yb - inset), refine_row(yb, x1 - inset - band, x1 - inset));
-    Cal { dpi: CAL_DPI, tl: (tl.0 as f64, tl.1 as f64), tr: (tr.0 as f64, tr.1 as f64), bl: (bl.0 as f64, bl.1 as f64), br: (br.0 as f64, br.1 as f64), length, width }
+    Cal { page_px: (g.w, g.h), dpi: CAL_DPI, tl: (tl.0 as f64, tl.1 as f64), tr: (tr.0 as f64, tr.1 as f64), bl: (bl.0 as f64, bl.1 as f64), br: (br.0 as f64, br.1 as f64), length, width }
 }
+
 
 // ----------------------------------------------------------------------------- holes json
 

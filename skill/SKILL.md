@@ -61,6 +61,14 @@ side view (thickness, holes drilled into edges) and any section view. Note part
 name, material and the technical notes (edge breaks, plating, finish) for the
 report; they are not geometry.
 
+Read the outline length and width from their printed dimensions, then run
+`calibrate` with them and check two things in its answer: that
+`outline_page_fraction` is the plan-view outline you saw on the page render
+(not a band inside it, a section view or a title-block cell), and that
+`scale_ratio` agrees with the scale in the title block. If either is off, the
+length or width you gave is wrong: re-read them before doing anything else,
+because every crop, ring-score and overlay is measured from this calibration.
+
 Counterbore direction: a solid double circle in the plan view is visible from
 the front, so the counterbore is on the top face; a dashed circle or a `背面`
 note means the back face. A section view confirms it. Chinese prints are
