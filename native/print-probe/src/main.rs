@@ -550,6 +550,17 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
             eprintln!("  {:.0} {:.0} {} {} {} {} {:.1} {:.1}", c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7);
         }
     }
+    // a plate outline is drawn with one line weight on all its sides: a candidate whose two
+    // vertical sides differ in weight by more than 30 % is a cell, hatching or a coincidence,
+    // and it must not set the weight bar for the real outline
+    cands.retain(|c| c.6 >= 0.7 * c.7);
+    // and it is one of the larger rectangles with this aspect ratio on the sheet, never a
+    // title-block cell or a small detail under a third the size of the largest match
+    let max_span = cands.iter().map(|c| c.1).fold(0.0, f64::max);
+    cands.retain(|c| c.1 >= 0.3 * max_span);
+    if debug {
+        eprintln!("{} candidates after the weight-consistency and size filters", cands.len());
+    }
     // visible-line weight is relative to the sheet: keep the candidates whose strokes are as thick
     // as the thickest candidate's (within 20 %), then take the strongest lines among them
     let max_width = cands.iter().map(|c| c.7).fold(0.0, f64::max);
