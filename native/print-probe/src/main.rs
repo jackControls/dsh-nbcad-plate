@@ -1,19 +1,62 @@
-//! print-probe: pixel tools for scanned plate prints, built for the nbcad-plate workflow.
+//! print-probe: pixel tools for plate prints, built for the nbcad-plate workflow.
 //!
-//! Every subcommand takes the print (PDF, rendered through `pdftoppm`), the plate size, and
-//! works in plate millimetres (origin at the lower-left corner of the plan view, y up):
+//! The print is a PDF (rendered here, no external tools), a PNG or a JPG. The page
+//! commands work on the sheet; the plate commands take the plate size and work in plate
+//! millimetres (origin at the lower-left corner of the plan view, y up):
 //!
-//!   print-probe calibrate  --pdf P --length L --width W
-//!   print-probe crop       --pdf P --length L --width W --region x0,y0,x1,y1 --out o.png [--dpi 400] [--holes h.json] [--grid 10]
-//!   print-probe ring-score --pdf P --length L --width W --holes h.json [--dpi 600] [--search 2.5]
-//!   print-probe symbols    --pdf P --length L --width W [--region x0,y0,x1,y1] [--dpi 300] [--holes h.json] [--out o.png]
+//!   print-probe info       --print P
+//!   print-probe render     --print P --out o.png [--dpi 150] [--window fx0,fy0,fx1,fy1] [--page 1]
+//!   print-probe calibrate  --print P --length L --width W
+//!   print-probe crop       --print P --length L --width W --region x0,y0,x1,y1 --out o.png [--dpi 400] [--holes h.json] [--grid 10]
+//!   print-probe ring-score --print P --length L --width W --holes h.json [--dpi 600] [--search 2.5]
+//!   print-probe symbols    --print P --length L --width W [--region x0,y0,x1,y1] [--dpi 300] [--holes h.json] [--out o.png]
 //!
-//! Renders are cached per (pdf, dpi, page, crop) under $PRINT_PROBE_CACHE or the temp dir.
+//! Page renders are cached per (file, dpi, page) under $PRINT_PROBE_CACHE or the temp dir.
+//! Every result is one JSON line on stdout; a failure is `{"ok":false,"error":...}`.
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Instant;
+
+use hayro::hayro_interpret::InterpreterSettings;
+use hayro::hayro_syntax::Pdf;
+use hayro::vello_cpu::color::palette::css::WHITE;
+use hayro::{RenderCache, RenderSettings};
+
+/// Raster prints (PNG, JPG) carry no reliable scale; their native pixels count as this dpi.
+const RASTER_NATIVE_DPI: f64 = 300.0;
+/// Largest page render accepted (per side, px): keeps memory bounded on huge sheets at high dpi.
+const MAX_PAGE_PX: f64 = 30000.0;
+/// Largest PNG the `render` command writes (per side, px): bigger images only cost tokens to view.
+const MAX_RENDER_PX: usize = 4096;
+
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Report a failure as the JSON line the host expects and exit.
+fn fail(message: &str) -> ! {
+    println!("{{\"ok\":false,\"error\":{}}}", json_string(message));
+    std::process::exit(1)
+}
+
+fn is_pdf(path: &str) -> bool {
+    path.to_ascii_lowercase().ends_with(".pdf")
+}
 
 // ----------------------------------------------------------------------------- images
 
@@ -69,37 +112,183 @@ fn cache_dir() -> PathBuf {
     dir
 }
 
-/// Render one page (or a pixel crop of it) to grayscale through pdftoppm, cached.
-fn render(pdf: &str, dpi: u32, page: u32, crop: Option<(i64, i64, i64, i64)>) -> Gray {
-    let meta = fs::metadata(pdf).unwrap_or_else(|_| panic!("cannot read {pdf}"));
+fn gray_from_rgba(w: usize, h: usize, rgba: &[u8]) -> Gray {
+    let mut px = vec![255u8; w * h];
+    for (i, c) in rgba.chunks_exact(4).enumerate().take(w * h) {
+        px[i] = ((c[0] as u32 * 299 + c[1] as u32 * 587 + c[2] as u32 * 114) / 1000) as u8;
+    }
+    Gray { w, h, px }
+}
+
+/// Render one PDF page at `dpi` with hayro (pure Rust; JPEG, CCITT, JBIG2 and JPX scans decode).
+fn render_pdf_page(path: &str, dpi: u32, page: u32) -> Gray {
+    let data = fs::read(path).unwrap_or_else(|e| fail(&format!("cannot read {path}: {e}")));
+    let pdf = Pdf::new(data).unwrap_or_else(|e| fail(&format!("cannot open {path} as a PDF: {e:?}")));
+    let pages = pdf.pages();
+    let count = pages.len();
+    let index = page.max(1) as usize - 1;
+    let p = pages.get(index).unwrap_or_else(|| fail(&format!("page {page} does not exist: the file has {count} page(s)")));
+    let scale = dpi as f32 / 72.0;
+    let (w, h) = p.render_dimensions();
+    if (w * scale) as f64 > MAX_PAGE_PX || (h * scale) as f64 > MAX_PAGE_PX {
+        fail(&format!("page {page} is {:.0} x {:.0} px at {dpi} dpi, above the {MAX_PAGE_PX} px limit; use a lower dpi", w * scale, h * scale));
+    }
+    let settings = RenderSettings { x_scale: scale, y_scale: scale, bg_color: WHITE, ..Default::default() };
+    let pixmap = hayro::render(p, &RenderCache::new(), &InterpreterSettings::default(), &settings);
+    let (pw, ph) = (pixmap.width() as usize, pixmap.height() as usize);
+    gray_from_rgba(pw, ph, pixmap.data_as_u8_slice())
+}
+
+/// Area-average (shrinking) or bilinear (enlarging) resample.
+fn resample(g: &Gray, scale: f64) -> Gray {
+    let w = ((g.w as f64) * scale).round().max(1.0) as usize;
+    let h = ((g.h as f64) * scale).round().max(1.0) as usize;
+    let mut px = vec![255u8; w * h];
+    if scale < 1.0 {
+        let inv = 1.0 / scale;
+        for y in 0..h {
+            let (sy0, sy1) = ((y as f64 * inv).floor() as usize, (((y + 1) as f64 * inv).ceil() as usize).min(g.h).max((y as f64 * inv).floor() as usize + 1));
+            for x in 0..w {
+                let (sx0, sx1) = ((x as f64 * inv).floor() as usize, (((x + 1) as f64 * inv).ceil() as usize).min(g.w).max((x as f64 * inv).floor() as usize + 1));
+                let mut sum = 0u64;
+                let mut n = 0u64;
+                for sy in sy0..sy1 {
+                    for sx in sx0..sx1 {
+                        sum += g.px[sy * g.w + sx] as u64;
+                        n += 1;
+                    }
+                }
+                px[y * w + x] = if n > 0 { (sum / n) as u8 } else { 255 };
+            }
+        }
+    } else {
+        for y in 0..h {
+            let fy = (y as f64 + 0.5) / scale - 0.5;
+            let y0 = fy.floor().max(0.0) as i64;
+            let ty = (fy - y0 as f64).clamp(0.0, 1.0);
+            for x in 0..w {
+                let fx = (x as f64 + 0.5) / scale - 0.5;
+                let x0 = fx.floor().max(0.0) as i64;
+                let tx = (fx - x0 as f64).clamp(0.0, 1.0);
+                let a = g.at(x0, y0) as f64;
+                let b = g.at(x0 + 1, y0) as f64;
+                let c = g.at(x0, y0 + 1) as f64;
+                let d = g.at(x0 + 1, y0 + 1) as f64;
+                let v = a * (1.0 - tx) * (1.0 - ty) + b * tx * (1.0 - ty) + c * (1.0 - tx) * ty + d * tx * ty;
+                px[y * w + x] = v.round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+    Gray { w, h, px }
+}
+
+/// Decode a PNG or JPG print; its native pixels count as RASTER_NATIVE_DPI.
+fn render_raster(path: &str, dpi: u32) -> Gray {
+    let img = image::open(path).unwrap_or_else(|e| fail(&format!("cannot decode {path}: {e}"))).to_luma8();
+    let (w, h) = (img.width() as usize, img.height() as usize);
+    let base = Gray { w, h, px: img.into_raw() };
+    let scale = dpi as f64 / RASTER_NATIVE_DPI;
+    if (scale - 1.0).abs() < 1e-9 {
+        base
+    } else {
+        if (base.w as f64 * scale) > MAX_PAGE_PX || (base.h as f64 * scale) > MAX_PAGE_PX {
+            fail(&format!("image is {:.0} x {:.0} px at {dpi} dpi, above the {MAX_PAGE_PX} px limit; use a lower dpi", base.w as f64 * scale, base.h as f64 * scale));
+        }
+        resample(&base, scale)
+    }
+}
+
+/// Render one whole page (PDF page or raster image) to grayscale at `dpi`, cached on disk.
+fn render_page(print: &str, dpi: u32, page: u32) -> Gray {
+    let meta = fs::metadata(print).unwrap_or_else(|e| fail(&format!("cannot read {print}: {e}")));
     let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
     let key = format!(
-        "{}-{}-{}-{}-{}-{:?}",
-        PathBuf::from(pdf).file_name().unwrap().to_string_lossy(),
+        "{}-{}-{}-{}-{}",
+        PathBuf::from(print).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         meta.len(),
         stamp,
         dpi,
-        page,
-        crop
+        page
     )
-    .replace(['(', ')', ' ', ','], "_");
+    .replace(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-' && c != '_', "_");
     let path = cache_dir().join(format!("{key}.pgm"));
     if let Ok(data) = fs::read(&path) {
         if data.len() > 16 {
             return parse_pgm(&data);
         }
     }
-    let prefix = cache_dir().join(format!("{key}.tmp"));
-    let mut cmd = Command::new("pdftoppm");
-    cmd.args(["-gray", "-r", &dpi.to_string(), "-f", &page.to_string(), "-l", &page.to_string()]);
-    if let Some((x, y, w, h)) = crop {
-        cmd.args(["-x", &x.to_string(), "-y", &y.to_string(), "-W", &w.to_string(), "-H", &h.to_string()]);
+    let g = if is_pdf(print) { render_pdf_page(print, dpi, page) } else { render_raster(print, dpi) };
+    let tmp = cache_dir().join(format!("{key}.{}.tmp", std::process::id()));
+    let mut data = format!("P5\n{} {}\n255\n", g.w, g.h).into_bytes();
+    data.extend_from_slice(&g.px);
+    if fs::write(&tmp, &data).is_ok() {
+        let _ = fs::rename(&tmp, &path);
     }
-    let status = cmd.args(["-singlefile", pdf, prefix.to_str().unwrap()]).status().expect("pdftoppm not found on PATH");
-    assert!(status.success(), "pdftoppm failed");
-    let produced = cache_dir().join(format!("{key}.tmp.pgm"));
-    fs::rename(&produced, &path).expect("rename render");
-    parse_pgm(&fs::read(&path).unwrap())
+    g
+}
+
+/// A pixel window of the page (white outside the page), the same for every command.
+fn crop_gray(g: &Gray, x: i64, y: i64, w: i64, h: i64) -> Gray {
+    let (w, h) = (w.max(1) as usize, h.max(1) as usize);
+    let mut px = vec![255u8; w * h];
+    for j in 0..h {
+        for i in 0..w {
+            px[j * w + i] = g.at(x + i as i64, y + j as i64);
+        }
+    }
+    Gray { w, h, px }
+}
+
+/// Render one page (or a pixel crop of it) to grayscale, cached.
+fn render(print: &str, dpi: u32, page: u32, crop: Option<(i64, i64, i64, i64)>) -> Gray {
+    let g = render_page(print, dpi, page);
+    match crop {
+        None => g,
+        Some((x, y, w, h)) => crop_gray(&g, x, y, w, h),
+    }
+}
+
+fn write_png_gray(path: &str, w: usize, h: usize, px: &[u8]) {
+    let file = fs::File::create(path).unwrap_or_else(|e| fail(&format!("cannot write {path}: {e}")));
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), w as u32, h as u32);
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap_or_else(|e| fail(&format!("cannot write {path}: {e}")));
+    writer.write_image_data(px).unwrap_or_else(|e| fail(&format!("cannot write {path}: {e}")));
+}
+
+/// `info`: what the file is, how many pages, how big.
+fn info_cmd(print: &str) -> String {
+    if is_pdf(print) {
+        let data = fs::read(print).unwrap_or_else(|e| fail(&format!("cannot read {print}: {e}")));
+        let pdf = Pdf::new(data).unwrap_or_else(|e| fail(&format!("cannot open {print} as a PDF: {e:?}")));
+        let pages = pdf.pages();
+        let sizes: Vec<String> = pages.iter().map(|p| { let (w, h) = p.render_dimensions(); format!("[{:.1},{:.1}]", w as f64 / 72.0 * 25.4, h as f64 / 72.0 * 25.4) }).collect();
+        format!("{{\"ok\":true,\"kind\":\"pdf\",\"pages\":{},\"page_size_mm\":[{}],\"note\":\"render a page with action render; window is given as page fractions from the top-left corner\"}}", pages.len(), sizes.join(","))
+    } else {
+        let (w, h) = image::image_dimensions(print).unwrap_or_else(|e| fail(&format!("cannot read {print}: {e}")));
+        format!("{{\"ok\":true,\"kind\":\"image\",\"pages\":1,\"size_px\":[{w},{h}],\"assumed_dpi\":{RASTER_NATIVE_DPI},\"page_size_mm\":[[{:.1},{:.1}]]}}", w as f64 / RASTER_NATIVE_DPI * 25.4, h as f64 / RASTER_NATIVE_DPI * 25.4)
+    }
+}
+
+/// `render`: a PNG of the page or of a window given as page fractions (top-left origin).
+fn render_cmd(print: &str, page: u32, dpi: u32, window: Option<(f64, f64, f64, f64)>, out: &str) -> String {
+    let g = render_page(print, dpi, page);
+    let (fx0, fy0, fx1, fy1) = window.unwrap_or((0.0, 0.0, 1.0, 1.0));
+    let x0 = (fx0.clamp(0.0, 1.0) * g.w as f64).floor() as i64;
+    let y0 = (fy0.clamp(0.0, 1.0) * g.h as f64).floor() as i64;
+    let x1 = (fx1.clamp(0.0, 1.0) * g.w as f64).ceil() as i64;
+    let y1 = (fy1.clamp(0.0, 1.0) * g.h as f64).ceil() as i64;
+    let (w, h) = ((x1 - x0).max(1), (y1 - y0).max(1));
+    if w as usize > MAX_RENDER_PX || h as usize > MAX_RENDER_PX {
+        fail(&format!("the window is {w} x {h} px at {dpi} dpi, above the {MAX_RENDER_PX} px limit for one image; lower the dpi or narrow the window"));
+    }
+    let c = crop_gray(&g, x0, y0, w, h);
+    write_png_gray(out, c.w, c.h, &c.px);
+    format!(
+        "{{\"ok\":true,\"png\":{},\"size\":[{},{}],\"dpi\":{},\"page_size_px\":[{},{}],\"window\":[{},{},{},{}],\"origin_px\":[{},{}],\"note\":\"a page fraction f maps to pixel f * page_size_px; zoom with a narrower window at a higher dpi\"}}",
+        json_string(out), c.w, c.h, dpi, g.w, g.h, fx0, fy0, fx1, fy1, x0, y0
+    )
 }
 
 // ----------------------------------------------------------------------------- calibration
@@ -1116,55 +1305,84 @@ fn parse_region(s: &str) -> (f64, f64, f64, f64) {
     (v[0].min(v[2]), v[1].min(v[3]), v[0].max(v[2]), v[1].max(v[3]))
 }
 
+fn parse_window(s: &str) -> (f64, f64, f64, f64) {
+    let v: Vec<f64> = s.split(',').map(|t| t.trim().parse().unwrap_or_else(|_| fail("--window wants four page fractions fx0,fy0,fx1,fy1"))).collect();
+    if v.len() != 4 {
+        fail("--window wants four page fractions fx0,fy0,fx1,fy1");
+    }
+    (v[0].min(v[2]), v[1].min(v[3]), v[0].max(v[2]), v[1].max(v[3]))
+}
+
+fn number(args: &[String], name: &str) -> Option<f64> {
+    arg(args, name).map(|v| v.parse().unwrap_or_else(|_| fail(&format!("{name} wants a number"))))
+}
+
 fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        let message = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "internal error".to_string());
+        println!("{{\"ok\":false,\"error\":{}}}", json_string(&message));
+    }));
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: print-probe <calibrate|crop|ring-score|symbols> --pdf P --length L --width W [...]");
+        eprintln!("usage: print-probe <info|render|calibrate|crop|ring-score|symbols> --print P [--length L --width W] [...]");
         std::process::exit(2);
     }
     let t0 = Instant::now();
     let cmd = args[1].as_str();
-    let pdf = arg(&args, "--pdf").expect("--pdf");
-    let page: u32 = arg(&args, "--page").map(|v| v.parse().unwrap()).unwrap_or(1);
-    let length: f64 = arg(&args, "--length").expect("--length").parse().unwrap();
-    let width: f64 = arg(&args, "--width").expect("--width").parse().unwrap();
-    let cal = calibrate(&pdf, page, length, width);
+    let print = arg(&args, "--print").or_else(|| arg(&args, "--pdf")).unwrap_or_else(|| fail("--print is required"));
+    let page: u32 = number(&args, "--page").unwrap_or(1.0) as u32;
     let holes = arg(&args, "--holes").map(|p| read_holes(&p)).unwrap_or_default();
     let output = match cmd {
-        "calibrate" => format!("{{\"ok\":true,\"calibration\":{}}}", cal.json()),
-        "crop" => {
-            let region = parse_region(&arg(&args, "--region").expect("--region"));
-            let dpi: u32 = arg(&args, "--dpi").map(|v| v.parse().unwrap()).unwrap_or(400);
-            let out = arg(&args, "--out").expect("--out");
-            let grid: f64 = arg(&args, "--grid").map(|v| v.parse().unwrap()).unwrap_or(0.0);
-            crop_cmd(&pdf, page, &cal, region, dpi, &out, &holes, grid)
+        "info" => info_cmd(&print),
+        "render" => {
+            let dpi = number(&args, "--dpi").unwrap_or(150.0) as u32;
+            let window = arg(&args, "--window").map(|w| parse_window(&w));
+            let out = arg(&args, "--out").unwrap_or_else(|| fail("render needs --out"));
+            render_cmd(&print, page, dpi, window, &out)
         }
-        "ring-score" => {
-            let dpi: u32 = arg(&args, "--dpi").map(|v| v.parse().unwrap()).unwrap_or(600);
-            let search: f64 = arg(&args, "--search").map(|v| v.parse().unwrap()).unwrap_or(2.5);
-            ring_score_cmd(&pdf, page, &cal, &holes, dpi, search)
+        "calibrate" | "crop" | "ring-score" | "probe" | "symbols" => {
+            let length = number(&args, "--length").unwrap_or_else(|| fail(&format!("{cmd} needs --length and --width")));
+            let width = number(&args, "--width").unwrap_or_else(|| fail(&format!("{cmd} needs --length and --width")));
+            let cal = calibrate(&print, page, length, width);
+            match cmd {
+                "calibrate" => format!("{{\"ok\":true,\"calibration\":{}}}", cal.json()),
+                "crop" => {
+                    let region = parse_region(&arg(&args, "--region").unwrap_or_else(|| fail("crop needs --region")));
+                    let dpi = number(&args, "--dpi").unwrap_or(400.0) as u32;
+                    let out = arg(&args, "--out").unwrap_or_else(|| fail("crop needs --out"));
+                    let grid = number(&args, "--grid").unwrap_or(0.0);
+                    crop_cmd(&print, page, &cal, region, dpi, &out, &holes, grid)
+                }
+                "ring-score" => {
+                    let dpi = number(&args, "--dpi").unwrap_or(600.0) as u32;
+                    let search = number(&args, "--search").unwrap_or(2.5);
+                    ring_score_cmd(&print, page, &cal, &holes, dpi, search)
+                }
+                "probe" => {
+                    let dpi = number(&args, "--dpi").unwrap_or(600.0) as u32;
+                    let at: Vec<f64> = arg(&args, "--at").unwrap_or_else(|| fail("probe needs --at x,y")).split(',').map(|t| t.trim().parse().unwrap_or_else(|_| fail("--at wants x,y"))).collect();
+                    let (x, y) = (at[0], at[1]);
+                    let g = render(&print, dpi, page, None);
+                    let ppm = cal.px_per_mm() * dpi as f64 / cal.dpi as f64;
+                    let (px, py) = cal.to_px(dpi, (0.0, 0.0))(x, y);
+                    let p = probe_refined(&g, px, py, ppm, 32.0);
+                    let thick = if p.r_px > 0.0 { thick_fraction(&g, p.cx, p.cy, p.r_px, ppm, (1.0f64).max(0.4 * p.r_px / ppm)) } else { 0.0 };
+                    format!("{{\"ok\":true,\"at\":[{},{}],\"px\":[{:.1},{:.1}],\"drawn\":\"{}\",\"ring\":{:.2},\"interior\":{:.2},\"thick\":{:.2},\"drawn_diameter_mm\":{:.1},\"profile_r_ring0_ring_tol_interior\":{}}}", x, y, px, py, p.kind, p.ring, p.interior, thick, 2.0 * p.r_px / ppm, profile(&g, px, py, ppm, 6.0))
+                }
+                _ => {
+                    let region = arg(&args, "--region").map(|r| parse_region(&r));
+                    let dpi = number(&args, "--dpi").unwrap_or(400.0) as u32;
+                    let out = arg(&args, "--out");
+                    symbols_cmd(&print, page, &cal, region, dpi, &holes, out.as_deref())
+                }
+            }
         }
-        "probe" => {
-            let dpi: u32 = arg(&args, "--dpi").map(|v| v.parse().unwrap()).unwrap_or(600);
-            let at: Vec<f64> = arg(&args, "--at").expect("--at x,y").split(',').map(|t| t.trim().parse().expect("--at x,y")).collect();
-            let (x, y) = (at[0], at[1]);
-            let g = render(&pdf, dpi, page, None);
-            let ppm = cal.px_per_mm() * dpi as f64 / cal.dpi as f64;
-            let (px, py) = cal.to_px(dpi, (0.0, 0.0))(x, y);
-            let p = probe_refined(&g, px, py, ppm, 32.0);
-            let thick = if p.r_px > 0.0 { thick_fraction(&g, p.cx, p.cy, p.r_px, ppm, (1.0f64).max(0.4 * p.r_px / ppm)) } else { 0.0 };
-            format!("{{\"ok\":true,\"at\":[{},{}],\"px\":[{:.1},{:.1}],\"drawn\":\"{}\",\"ring\":{:.2},\"interior\":{:.2},\"thick\":{:.2},\"drawn_diameter_mm\":{:.1},\"profile_r_ring0_ring_tol_interior\":{}}}", x, y, px, py, p.kind, p.ring, p.interior, thick, 2.0 * p.r_px / ppm, profile(&g, px, py, ppm, 6.0))
-        }
-        "symbols" => {
-            let region = arg(&args, "--region").map(|r| parse_region(&r));
-            let dpi: u32 = arg(&args, "--dpi").map(|v| v.parse().unwrap()).unwrap_or(400);
-            let out = arg(&args, "--out");
-            symbols_cmd(&pdf, page, &cal, region, dpi, &holes, out.as_deref())
-        }
-        other => {
-            eprintln!("unknown subcommand {other}");
-            std::process::exit(2);
-        }
+        other => fail(&format!("unknown subcommand {other}")),
     };
     let mut o = output;
     o.insert_str(o.len() - 1, &format!(",\"elapsed_ms\":{}", t0.elapsed().as_millis()));

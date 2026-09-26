@@ -17,31 +17,36 @@ how many script runs you allow yourself.
   holes it finds (x, y from the lower-left corner, diameter, counterbore). On
   failure it returns the failing step and the reason.
 - `nbcad_inspect_step(step_path)` re-imports a STEP and returns the same summary.
-- `nbcad_overlay_print(pdf_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`
+- `nbcad_overlay_print(print_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`
   draws the holes of a STEP file onto the plan view of the print (red = hole,
-  blue = counterbore, green = the plate outline it calibrated on) and writes a
-  PNG; with `region: "x0,y0,x1,y1"` in millimetres it writes a 400 dpi crop of
-  that window. View the PNG with your image tool.
-- `nbcad_print_probe(action, pdf_path, length_mm, width_mm, ...)` is the fast
-  native pixel toolkit (under a second per call, so use it freely instead of
-  writing your own pixel scripts): `crop` writes a millimetre window with a
-  10 mm tick grid, so a position can be read off the ticks; `ring-score` says,
-  for every hole of a STEP, what is drawn at that point or within 2.5 mm
-  (symbol with its centre and offset, dot, dashed, none); `symbols` lists the
-  circles and dots found in a region and which model holes or drawn symbols
-  are unmatched; `calibrate` reports the plate outline and skew. Run
-  `ring-score` after every script run and look at each hole reported with an
-  offset over 1 mm or nothing drawn. Treat `symbols` output as places to look
-  at on a crop, never as positions to model from.
+  blue = counterbore, green ticks = the millimetre grid) and writes a PNG; with
+  `region: "x0,y0,x1,y1"` in millimetres it writes a 400 dpi crop of that
+  window. View the PNG with your image tool.
+- `nbcad_print_probe(action, print_path, ...)` is the fast native pixel toolkit
+  (under a second per call once the page is rendered, so use it freely instead
+  of writing your own pixel scripts). It reads PDF, PNG and JPG prints itself;
+  nothing else is installed on the machine, so never call `pdftoppm`, Python or
+  ImageMagick. `render` writes a PNG of the page or of a `window` given as
+  page fractions `"fx0,fy0,fx1,fy1"` (0 to 1 from the top-left corner) at any
+  dpi: that is how you read the sheet. `info` gives the page count and size.
+  The plate actions take `length_mm` and `width_mm`: `crop` writes a
+  millimetre window with a 10 mm tick grid, so a position can be read off the
+  ticks; `ring-score` says, for every hole of a STEP, what is drawn at that
+  point or within 2.5 mm (symbol with its centre and offset, dot, dashed,
+  none); `symbols` lists the circles and dots found in a region and which
+  model holes or drawn symbols are unmatched; `calibrate` reports the plate
+  outline and skew. Run `ring-score` after every script run and look at each
+  hole reported with an offset over 1 mm or nothing drawn. Treat `symbols`
+  output as places to look at on a crop, never as positions to model from.
 - The example script `{{SKILL_DIR}}/plate-example.nbcad.jsonc` runs cleanly and
   shows every idiom below. Read it once, then copy its structure and change only
   the numbers and the list of feature steps.
-- Reading a scanned print: it has no text layer. Render crops with
-  `pdftoppm -r 400 -x X -y Y -W W -H H -png -singlefile file.pdf out` and view
-  them; zoom until every digit is unambiguous (a faint decimal point is common:
-  6.60 can look like 6 60). Pixel measurement is for disambiguation only, never a
-  substitute for a printed number, and the title-block scale must not be used to
-  measure anything.
+- Reading the print: a scan has no text layer. Start with `render` of the whole
+  page at 100 dpi to see the layout, then `render` windows at 300 to 600 dpi and
+  view them; zoom until every digit is unambiguous (a faint decimal point is
+  common: 6.60 can look like 6 60). Pixel measurement is for disambiguation
+  only, never a substitute for a printed number, and the title-block scale must
+  not be used to measure anything.
 - A hole position comes from a printed dimension, or from the drawn hole symbol
   (a small circle with a crosshair, or an X-marked circle for a tapped hole)
   that you have seen on a crop at that spot. Never take positions from a circle

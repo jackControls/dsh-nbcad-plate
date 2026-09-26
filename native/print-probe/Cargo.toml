@@ -1,14 +1,17 @@
 [package]
 name = "print-probe"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Fast pixel tools for scanned plate prints: outline calibration, millimetre crops with overlays, ring scores at given centres, hole-symbol detection and coverage matching."
+description = "Fast pixel tools for plate prints (PDF, PNG or JPG, rendered by the binary itself): outline calibration, millimetre crops with overlays, ring scores at given centres, hole-symbol detection and coverage matching."
 license = "MIT"
 
 [dependencies]
+hayro = "0.7"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 png = "0.17"
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
+strip = true
