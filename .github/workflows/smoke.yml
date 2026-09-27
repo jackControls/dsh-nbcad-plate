@@ -1,0 +1,30 @@
+# Runs the plugin's platform smoke test on the three operating systems the packed probe
+# binaries target: the host helpers against a stand-in engine, and the packed print-probe on a
+# synthetic print. No dsh, no noBS CAD build, no Python.
+name: smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'lib/**'
+      - 'bin/**'
+      - 'test/**'
+      - 'package.json'
+      - '.github/workflows/smoke.yml'
+  pull_request:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Platform smoke test
+        run: node test/smoke.mjs

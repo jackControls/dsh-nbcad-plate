@@ -132,18 +132,27 @@ runs.
 
 ## Windows
 
-The plugin runs on Windows without extra tools. Give the engine path with forward
-slashes or a quoted string:
+The plugin runs on Windows without extra tools; the `smoke` workflow exercises the
+host code and the packed `print-probe.exe` on `windows-latest` at every push.
+Point the engine setting at the `.exe` itself (a `.cmd` or `.bat` wrapper cannot
+be spawned), with forward slashes or a quoted string:
 
 ```yaml
 - id: nbcad-plate
   config:
-    server: C:/Users/me/noBS-CAD/target/debug/nbcad-mcp.exe
+    server: C:/Users/me/noBS-CAD/mcp-server/target/debug/nbcad-mcp.exe
 ```
+
+A bare `nbcad-mcp` is looked up on the PATH through `PATHEXT`. noBS CAD builds
+its MCP server on Windows with the vcpkg OpenCASCADE SDK (see its
+`mcp-server` workflow and `cargo xtask install-mcp`); the Windows desktop
+release is verified as an MCP package in noBS CAD's own CI.
 
 The desktop detection reads `%TEMP%\nbcad-sessions\`, where the noBS CAD desktop
 publishes its heartbeats on Windows, and the probe caches page renders under
-`%TEMP%\print-probe-cache\` (`PRINT_PROBE_CACHE` moves it).
+`%TEMP%\print-probe-cache\` (`PRINT_PROBE_CACHE` moves it). Windows on ARM
+falls back to the x64 probe under emulation. Print and part names may use any
+script (Chinese file names are kept as they are).
 
 ## Layout
 
