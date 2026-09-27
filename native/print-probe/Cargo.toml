@@ -1,6 +1,6 @@
 [package]
 name = "print-probe"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "Fast pixel tools for plate prints (PDF, PNG or JPG, rendered by the binary itself): outline calibration, millimetre crops with overlays, ring scores at given centres, hole-symbol detection and coverage matching."
 license = "MIT"

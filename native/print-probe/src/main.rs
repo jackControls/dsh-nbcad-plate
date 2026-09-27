@@ -1368,7 +1368,7 @@ fn symbols_cmd(pdf: &str, page: u32, cal: &Cal, region: Option<(f64, f64, f64, f
         "{{\"ok\":true,\"dpi\":{},\"region_mm\":[{},{},{},{}],\"detect_ms\":{},\"note\":\"symbols are circles or solid dots found at ink crossings; text, arrowheads and concentric rings can still slip through, so treat print_only entries as places to look at, never as positions to model from\",\"symbols_found\":{},\"symbols\":[{}],\"partial_rings\":[{}],\"model_holes_in_region\":{},\"matched\":{},\"model_only\":[{}],\"print_only\":[{}],\"matched_offset_over_1mm\":[{}]{}}}",
         dpi, region.0, region.1, region.2, region.3, detect_ms, syms.len(), sym_json.join(","), dashed_json.join(","),
         matched.len() + model_only.len(), matched.len(), mo.join(","), po.join(","), far.join(","),
-        out.map_or(String::new(), |p| format!(",\"png\":\"{p}\",\"legend\":\"green = model hole on a drawn symbol, red = model hole with no symbol, magenta = drawn symbol with no model hole, orange = symbol (no model given)\""))
+        out.map_or(String::new(), |p| format!(",\"png\":{},\"legend\":\"green = model hole on a drawn symbol, red = model hole with no symbol, magenta = drawn symbol with no model hole, orange = symbol (no model given)\"", json_string(p)))
     )
 }
 

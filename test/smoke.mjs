@@ -80,6 +80,7 @@ if (probe) {
   const ppm = cal.calibration?.px_per_mm ?? 0
   check('probe calibrate finds the 1:1 outline', cal.ok === true && Math.abs(ppm - 300 / 25.4) / (300 / 25.4) < 0.03, JSON.stringify(cal).slice(0, 220))
   const crop = probeJson(['crop', '--print', print, '--length', '200', '--width', '100', '--region', '0,0,60,40', '--out', join(tmp, 'crop.png'), '--grid', '10']); check('probe crop', crop.ok === true && existsSync(join(tmp, 'crop.png')), JSON.stringify(crop).slice(0, 160))
+  const symbols = probeJson(['symbols', '--print', print, '--length', '200', '--width', '100', '--out', join(tmp, 'symbols.png')]); check('probe symbols with a picture', symbols.ok === true && existsSync(join(tmp, 'symbols.png')), JSON.stringify(symbols).slice(0, 160))
   const missing = probeJson(['info', '--print', join(tmp, 'nope.pdf')]); check('probe reports a missing file as JSON', missing.ok === false && /cannot read/.test(missing.error), JSON.stringify(missing))
 }
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed', 'on', PLATFORM)
