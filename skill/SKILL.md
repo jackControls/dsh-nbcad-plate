@@ -16,7 +16,17 @@ how many script runs you allow yourself.
   summary (bounding box, planar and cylindrical face counts) plus the vertical
   holes it finds (x, y from the lower-left corner, diameter, counterbore). On
   failure it returns the failing step and the reason.
+  The result also carries the engine's own feature summary (holes tallied by
+  class with thread, depth and through flags) and its warnings for mistakes
+  that raise no error: a first point left out of `positions`, overlapping
+  holes, holes off the body, blind depths deeper than the body, unused
+  bindings. Read every warning; a warning is a mistake to fix, not a note.
 - `nbcad_inspect_step(step_path)` re-imports a STEP and returns the same summary.
+- `nbcad_check(step_path, expected, tolerance_mm?)` compares your feature
+  table (`{bbox: [L, W, T], holes: [{x, y, diameter, counterbore_diameter?,
+  through?, depth?}]}`) with the built STEP through the engine and lists the
+  matched, missing and extra holes with offsets. Run it right after a
+  successful script run: a miss here is a script mistake, not a reading one.
 - `nbcad_overlay_print(print_path, step_path, out_png, length_mm, width_mm, region?, dpi?)`
   draws the holes of a STEP file onto the plan view of the print (red = hole,
   blue = counterbore, green ticks = the millimetre grid) and writes a PNG; with
@@ -41,7 +51,10 @@ how many script runs you allow yourself.
   as places to look at on a crop, never as positions to model from.
 - The example script `{{SKILL_DIR}}/plate-example.nbcad.jsonc` runs cleanly and
   shows every idiom below. Read it once, then copy its structure and change only
-  the numbers and the list of feature steps.
+  the numbers and the list of feature steps. Its twin
+  `{{SKILL_DIR}}/plate-example-chains.nbcad.jsonc` builds the same plate with
+  construction chains instead of coordinates (section 5b); read that one when
+  the print dimensions holes from the edges and in chains.
 - Reading the print: a scan has no text layer. Start with `render` of the whole
   page at 100 dpi to see the layout, then `render` windows at 300 to 600 dpi and
   view them; zoom until every digit is unambiguous (a faint decimal point is
@@ -174,6 +187,43 @@ Structure = the example. Idioms, all present in the example:
 - Fits and tolerances: nominal diameter, note in the report.
 - Keep the `checks` from the example.
 
+## 5b. Construction chains instead of coordinates
+
+When a print locates holes by chains from the plate edges (the usual case on
+small and medium plates), let the engine do the arithmetic the way a
+draughtsman would: draw the chains as lines whose lengths are the printed
+numbers and anchor each hole to the end of its chain. The idioms are all in
+`plate-example-chains.nbcad.jsonc`:
+
+- After the plate is built, bind its top face (`face(prev, "top_0", TOP)`) and
+  open one sketch on it: `sketch_begin` with `plane: {"type": "planar_face",
+  "face_id": {"$ref": "top_0", "pointer": "/id"}}` and
+  `"face_origin": "global_origin_projection"`, so sketch x, y are plate x, y.
+- One `sketch_add_line_locked` per printed dimension: `from` is a plate point
+  (`{"x": 0, "y": 0}` on the datum corner, `{"x": L, "y": 0}` when the chain
+  starts at the right edge) or the end of the previous line, `length_mm` is
+  the printed number, `angle_deg` 0 along +x, 90 along +y, 180 along -x, 270
+  along -y, and a `45°` callout is a line at 45; `to_hint` can stay
+  `{"x": 1, "y": 0}`. The end of an earlier line is read back from that step:
+  `{"$select": {"from": {"$ref": "<line step>", "pointer": "/sketch"}, "path":
+  "/entities", "where": {"/id": {"$ref": "<line step>", "pointer":
+  "/entity_id"}}, "take": "one", "pointer": "/end"}}`.
+- `sketch_finish`, then holes as in section 5, but each anchor is
+  `"position": {"x": 0, "y": 0}, "position_reference": {"sketch_name":
+  "Chains", "entity_id": {"$ref": "<line step>", "pointer": "/entity_id"},
+  "kind": "end"}`; inside `positions` every entry carries its own reference.
+  `position` is required by the schema but the reference drives the centre.
+  Bind the face for the first hole from the last solid step (`plate_build`),
+  never from a sketch step: sketch results carry no scene.
+- Bolt circles, pitched rows and symmetric spans stay on the arithmetic of
+  section 4 (or mix: a chain may start at a hole located by arithmetic). A
+  dimension between two holes is a chain line from the first hole's end.
+- The chains stay in the file as a sketch a reviewer can open in noBS CAD and
+  compare with the print line by line.
+- The run result's overlap and off-body warnings are not evaluated for anchored
+  holes (the engine reads the placeholder there); their positions are verified
+  by `nbcad_check` on the exported STEP, which reads the built geometry.
+
 Parser rules: every step is exactly one of `call`, `note`, `view`, `let` or
 `assert`; a chapter heading goes on a `note` step that also has `"note"` text;
 step ids are unique; a `$ref` names only an earlier step id or `let` binding;
@@ -196,7 +246,9 @@ declare the part done while a callout group is absent.
 - Bounding box = L × W × T, one body, no scene errors.
 - Holes by diameter match the inventory (tap-drill diameters for threads);
   counterbores match; edge holes counted in the cylindrical faces.
-- `nbcad_inspect_step` on the exported STEP gives the same numbers.
+- `nbcad_inspect_step` on the exported STEP gives the same numbers, and
+  `nbcad_check` with the feature table as `expected` must report no missing
+  and no extra hole.
 - Probe check after every script run: `nbcad_print_probe` with `ring-score`;
   every hole must come back as symbol, dot or dashed with an offset under 1 mm.
   An offset over 1 mm means a chain was misread or the symbol belongs to

@@ -1,0 +1,983 @@
+// The plate of plate-example.nbcad.jsonc located the way the print is read: a sketch of
+// construction chains on the top face, one line per printed dimension starting from a plate
+// edge, and every hole anchored to the end of its chain. No coordinate arithmetic; the engine
+// adds the lengths. Millimetres; origin at the lower-left corner of the plan view, y up.
+{
+  "version": 1,
+  "name": "Example plate located by construction chains",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Stock plate",
+      "note": "Plate 160 x 50 x 12 mm, the same part as plate-example.nbcad.jsonc. Origin at the lower-left corner of the plan view, y up, thickness along +z.",
+      "duration_ms": 800
+    },
+    {
+      "id": "plate_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Plate outline",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 0,
+            "y": 0
+          },
+          "corner_hint": {
+            "x": 160,
+            "y": 50
+          },
+          "width_mm": 160,
+          "height_mm": 50,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "plate_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "plate_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": 0,
+                "/position/y": 0
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "plate_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Plate outline",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 12
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_feature": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_body": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "plate_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Chains on the top face",
+      "note": "One sketch on the top face, with sketch zero at the projected global origin so sketch x, y are plate x, y. Every printed dimension becomes one line of that length: a chain starts at a plate edge point (x = 0 or y = 0 is a datum edge, x = 160 or y = 50 the opposite edge) and each further line starts at the end of the previous one, read back from that step with a selector. Angle 0 runs along +x, 90 along +y, 180 along -x, 270 along -y; a 45 degree callout is a line at 45.",
+      "duration_ms": 800
+    },
+    {
+      "let": {
+        "top_0": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_build"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "chains_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Chains",
+          "plane": {
+            "type": "planar_face",
+            "face_id": {
+              "$ref": "top_0",
+              "pointer": "/id"
+            }
+          },
+          "face_origin": "global_origin_projection"
+        }
+      }
+    },
+    {
+      "id": "cb_left_x",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 12,
+          "angle_deg": 0,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "cb_left_y",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "cb_left_x",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "cb_left_x",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 12,
+          "angle_deg": 90,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "cb_right_x",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "x": 160,
+            "y": 0
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 12,
+          "angle_deg": 180,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "cb_right_y",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "cb_right_x",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "cb_right_x",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 12,
+          "angle_deg": 90,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "bore_x",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 40,
+          "angle_deg": 0,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "bore_y",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "bore_x",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "bore_x",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 25,
+          "angle_deg": 90,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "small_x",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 60,
+          "angle_deg": 0,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "small_y",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "small_x",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "small_x",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 25,
+          "angle_deg": 90,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "small_pitch",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "small_y",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "small_y",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 40,
+          "angle_deg": 0,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "diag",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "bore_y",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "bore_y",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 20,
+          "angle_deg": 45,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "blind_x",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 75,
+          "angle_deg": 0,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "blind_y",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked",
+        "arguments": {
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "blind_x",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "blind_x",
+                  "pointer": "/entity_id"
+                }
+              },
+              "take": "one",
+              "pointer": "/end"
+            }
+          },
+          "to_hint": {
+            "x": 1,
+            "y": 0
+          },
+          "length_mm": 12,
+          "angle_deg": 90,
+          "ctrl_held": false
+        }
+      }
+    },
+    {
+      "id": "chains_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "Holes anchored to chain ends",
+      "note": "Each hole step names the chain line whose end is its centre (position_reference with kind end). One call per callout group, the first anchor repeated inside positions, like the coordinate idiom. The face is bound from the last solid step: a sketch step carries no scene.",
+      "duration_ms": 800
+    },
+    {
+      "let": {
+        "top_1": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_build"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "corner_cbores",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "top_1",
+            "pointer": "/id"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "position_reference": {
+            "sketch_name": "Chains",
+            "entity_id": {
+              "$ref": "cb_left_y",
+              "pointer": "/entity_id"
+            },
+            "kind": "end"
+          },
+          "diameter": 6.6,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "counterbore",
+          "counterbore_diameter": 11,
+          "counterbore_depth": 6.5,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false,
+          "positions": [
+            {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "position_reference": {
+                "sketch_name": "Chains",
+                "entity_id": {
+                  "$ref": "cb_left_y",
+                  "pointer": "/entity_id"
+                },
+                "kind": "end"
+              }
+            },
+            {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "position_reference": {
+                "sketch_name": "Chains",
+                "entity_id": {
+                  "$ref": "cb_right_y",
+                  "pointer": "/entity_id"
+                },
+                "kind": "end"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "let": {
+        "top_2": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "corner_cbores"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "bore",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "top_2",
+            "pointer": "/id"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "position_reference": {
+            "sketch_name": "Chains",
+            "entity_id": {
+              "$ref": "bore_y",
+              "pointer": "/entity_id"
+            },
+            "kind": "end"
+          },
+          "diameter": 20,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "top_3": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "bore"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "small_cbores",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "top_3",
+            "pointer": "/id"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "position_reference": {
+            "sketch_name": "Chains",
+            "entity_id": {
+              "$ref": "small_y",
+              "pointer": "/entity_id"
+            },
+            "kind": "end"
+          },
+          "diameter": 4.5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "counterbore",
+          "counterbore_diameter": 8,
+          "counterbore_depth": 4.6,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false,
+          "positions": [
+            {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "position_reference": {
+                "sketch_name": "Chains",
+                "entity_id": {
+                  "$ref": "small_y",
+                  "pointer": "/entity_id"
+                },
+                "kind": "end"
+              }
+            },
+            {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "position_reference": {
+                "sketch_name": "Chains",
+                "entity_id": {
+                  "$ref": "small_pitch",
+                  "pointer": "/entity_id"
+                },
+                "kind": "end"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "let": {
+        "top_4": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "small_cbores"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "diag_m4",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "top_4",
+            "pointer": "/id"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "position_reference": {
+            "sketch_name": "Chains",
+            "entity_id": {
+              "$ref": "diag",
+              "pointer": "/entity_id"
+            },
+            "kind": "end"
+          },
+          "diameter": 3.3,
+          "extent": {
+            "type": "distance",
+            "depth": 9
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false,
+          "thread": {
+            "standard": "iso_metric",
+            "series": "metric_coarse",
+            "designation": "M4",
+            "class": "6H",
+            "nominal_diameter": 4,
+            "pitch": 0.7,
+            "threads_per_inch": null,
+            "hand": "right",
+            "depth": 6,
+            "representation": "simplified"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "top_5": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "diag_m4"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "blind",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "top_5",
+            "pointer": "/id"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "position_reference": {
+            "sketch_name": "Chains",
+            "entity_id": {
+              "$ref": "blind_y",
+              "pointer": "/entity_id"
+            },
+            "kind": "end"
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "distance",
+            "depth": 5
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "plate_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/errors"
+      },
+      "equals": []
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    }
+  ]
+}

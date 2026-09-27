@@ -14,7 +14,7 @@ import { runScript } from '../lib/cad.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'skill', 'plate-example.nbcad.jsonc')
-const [W, H, T] = [160, 50, 8]
+const [W, H, T] = [160, 50, 12]
 
 const binding = (name, expr) => ({ let: { [name]: expr } })
 const face = (prev, name, where) => binding(name, { $select: {
@@ -53,7 +53,7 @@ const BOTTOM = { '/plane/normal/2': -1, '/plane/origin/2': 0 }
 const EDGE_Y0 = { '/plane/normal/1': -1 }
 
 const steps = [
-  note('Stock plate', "Plate 160 x 50 x 8 mm. Origin at the lower-left corner of the plan view, y up, thickness along +z, so every position is read straight off the print's chains."),
+  note('Stock plate', "Plate 160 x 50 x 12 mm. Origin at the lower-left corner of the plan view, y up, thickness along +z, so every position is read straight off the print's chains."),
   ...rectangle('plate', 'Plate outline', 0, 0, W, H),
   { id: 'plate_build', call: { group: 'solid/build', operation: 'solid_extrude', arguments: { sketch_name: 'Plate outline', profile_indices: [0], operation: 'new_body', extent: { type: 'distance', distance: T }, taper_angle_deg: 0, flip: false, target_body_ids: [] } } },
   binding('plate_feature', { $select: { from: { $ref: 'plate_build' }, path: '/document/features', take: 'last', pointer: '/id' } }),

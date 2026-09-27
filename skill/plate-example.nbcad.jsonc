@@ -9,7 +9,7 @@
   "steps": [
     {
       "chapter": "Stock plate",
-      "note": "Plate 160 x 50 x 8 mm. Origin at the lower-left corner of the plan view, y up, thickness along +z, so every position is read straight off the print's chains.",
+      "note": "Plate 160 x 50 x 12 mm. Origin at the lower-left corner of the plan view, y up, thickness along +z, so every position is read straight off the print's chains.",
       "duration_ms": 800
     },
     {
@@ -94,7 +94,7 @@
           "operation": "new_body",
           "extent": {
             "type": "distance",
-            "distance": 8
+            "distance": 12
           },
           "taper_angle_deg": 0,
           "flip": false,
@@ -335,7 +335,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 8
+              "/plane/origin/2": 12
             },
             "take": "one"
           }
@@ -361,7 +361,7 @@
               "point": [
                 12,
                 12,
-                8
+                12
               ],
               "basis": {
                 "$ref": "top_0",
@@ -386,7 +386,7 @@
                   "point": [
                     12,
                     12,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_0",
@@ -401,7 +401,7 @@
                   "point": [
                     148,
                     12,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_0",
@@ -436,7 +436,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 8
+              "/plane/origin/2": 12
             },
             "take": "one"
           }
@@ -462,7 +462,7 @@
               "point": [
                 60,
                 25,
-                8
+                12
               ],
               "basis": {
                 "$ref": "top_1",
@@ -487,7 +487,7 @@
                   "point": [
                     60,
                     25,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_1",
@@ -502,7 +502,7 @@
                   "point": [
                     100,
                     25,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_1",
@@ -537,7 +537,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 8
+              "/plane/origin/2": 12
             },
             "take": "one"
           }
@@ -561,9 +561,9 @@
           "position": {
             "$project": {
               "point": [
-                40.0,
-                25.0,
-                8
+                40,
+                25,
+                12
               ],
               "basis": {
                 "$ref": "top_2",
@@ -611,7 +611,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 8
+              "/plane/origin/2": 12
             },
             "take": "one"
           }
@@ -637,7 +637,7 @@
               "point": [
                 51.3137,
                 36.3137,
-                8
+                12
               ],
               "basis": {
                 "$ref": "top_3",
@@ -663,7 +663,7 @@
                   "point": [
                     51.3137,
                     36.3137,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_3",
@@ -678,7 +678,7 @@
                   "point": [
                     28.6863,
                     36.3137,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_3",
@@ -693,7 +693,7 @@
                   "point": [
                     28.6863,
                     13.6863,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_3",
@@ -708,7 +708,7 @@
                   "point": [
                     51.3137,
                     13.6863,
-                    8
+                    12
                   ],
                   "basis": {
                     "$ref": "top_3",
@@ -834,7 +834,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 8
+              "/plane/origin/2": 12
             },
             "take": "one"
           }
@@ -860,7 +860,7 @@
               "point": [
                 75,
                 12,
-                8
+                12
               ],
               "basis": {
                 "$ref": "top_4",
@@ -934,7 +934,7 @@
               "point": [
                 20,
                 0,
-                4.0
+                6
               ],
               "basis": {
                 "$ref": "edge_y0",
@@ -959,7 +959,7 @@
             "designation": "M6",
             "class": "6H",
             "nominal_diameter": 6,
-            "pitch": 1.0,
+            "pitch": 1,
             "threads_per_inch": null,
             "hand": "right",
             "depth": 10,

@@ -9,14 +9,23 @@ It registers:
 - the skill `nbcad-plate`: the standard workflow for plate parts, from a
   ten-hole bracket to a dense plate with eighty holes (sheet survey, callout
   inventory, corner-origin frame, chain arithmetic, one script per part,
-  verification by hole counts, report), with a validated example script that
-  shows every modelling idiom (`skill/plate-example.nbcad.jsonc`);
-- four tools that drive a headless noBS CAD engine and the print:
+  verification by hole counts, report), with two validated example scripts:
+  `skill/plate-example.nbcad.jsonc` locates holes by coordinates and shows
+  every modelling idiom, `skill/plate-example-chains.nbcad.jsonc` builds the
+  same plate with construction chains (lines of the printed lengths from the
+  plate edges, holes anchored to their ends) so the engine does the arithmetic
+  and a reviewer can compare the chains with the print;
+- five tools that drive a headless noBS CAD engine and the print:
   - `nbcad_run_script(script_path, step_path)`: run a version 1 `.nbcad.jsonc`
-    script in a blank document, export STEP, return the scene summary and the
-    holes found, or the failing step and reason;
+    script in a blank document, export STEP, return the engine's feature
+    summary and warnings (a position left out of `positions`, overlapping
+    holes, holes off the body, blind depths deeper than the body, unused
+    bindings), the holes found, or the failing step and reason;
   - `nbcad_inspect_step(step_path)`: re-import a STEP file and return the same
     summary, for verification;
+  - `nbcad_check(step_path, expected, tolerance_mm?)`: compare the model's
+    feature table with the STEP through the engine: matched, missing and extra
+    holes with offsets, and the bounding box;
   - `nbcad_print_probe(action, print_path, ...)`: the native pixel toolkit
     (Rust, `native/print-probe`, packed as a binary for every platform). It
     reads PDF, PNG and JPG prints itself: `render` (a PNG of the page or of a
@@ -147,7 +156,8 @@ bin/<platform>/          packed print-probe binaries (darwin-arm64, darwin-x64, 
 native/print-probe/      Rust source of the probe (PDF rendering by hayro, PNG/JPG by image)
 skill/SKILL.md           the workflow (also usable as a plain filesystem skill)
 skill/plate-example.nbcad.jsonc   validated example with every idiom
-tools/make-example.mjs   regenerates (--write) and validates (--validate) the example
+tools/make-example.mjs   regenerates (--write) and validates (--validate) the coordinate example
+tools/make-chains-example.mjs   the same for the construction-chain example
 .github/workflows/probe-binaries.yml   builds the probe for every packed platform
 cordis.patch.yml         bundle patch that mounts the plugin
 ```
@@ -160,6 +170,7 @@ then `print-probe` on the PATH.
 
 ```bash
 NBCAD_MCP=/path/to/nbcad-mcp node tools/make-example.mjs --validate
+NBCAD_MCP=/path/to/nbcad-mcp node tools/make-chains-example.mjs --validate
 ```
 
 To rebuild the probe for this machine:
