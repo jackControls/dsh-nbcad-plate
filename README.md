@@ -78,8 +78,11 @@ brief and collects the files. The host half serves the panel's routes under
 - `dsh` 0.1.5 to 0.1.9, alphas and release candidates included (the peer ranges
   name each prerelease line explicitly, as node-semver requires), with a profile
   based on `headless`, `tui` or `web`; Node 22 or later.
-- A noBS CAD build with the MCP server: `cargo build -p nbcad-mcp` in the noBS CAD
-  checkout (the executable is `target/debug/nbcad-mcp`, `nbcad-mcp.exe` on Windows).
+- noBS CAD. The application itself serves stdio MCP: the plugin starts it with
+  `--headless`, so an installed noBS CAD (the release zip on Windows, the app on
+  macOS, the deb on Linux) is the engine. A developer build of `nbcad-mcp`
+  (`cargo build --manifest-path mcp-server/Cargo.toml` in the noBS CAD checkout)
+  works too and needs no flag.
 
 Nothing else: no Python, no poppler, no Rust toolchain. The print probe is packed
 as a binary under `bin/` for macOS (Apple silicon and Intel), Linux (x64 and
@@ -103,20 +106,24 @@ Or from a local checkout:
 dsh plugin --profile nbcad add file:/path/to/dsh-nbcad-plate
 ```
 
-Then point the plugin at the engine in the profile's `cordis.patch.yml`
-(`~/.dsh/profiles/nbcad/cordis.patch.yml`):
+The engine is found automatically, in this order: `config.server` or `NBCAD_MCP`;
+`nbcad-mcp`, `nbcad` or `noBS-CAD` on the PATH; the executable of a noBS CAD that
+is running (read from its session registry); the installed application (on
+Windows the `nbcad://` handler noBS CAD registers on its first normal launch, on
+macOS `/Applications/noBS CAD.app`, on Linux `/usr/bin/nbcad`). The panel's
+status strip says which one it uses. To pin it, set it in the profile's
+`cordis.patch.yml` (`~/.dsh/profiles/nbcad/cordis.patch.yml`):
 
 ```yaml
 - id: nbcad-plate
   config:
-    server: /path/to/noBS-CAD/target/debug/nbcad-mcp
+    server: /Applications/noBS CAD.app/Contents/MacOS/nbcad   # or .../nbcad-mcp
+    # serverArgs: ['--headless']   # the default for the application; none for nbcad-mcp
 ```
 
-`NBCAD_MCP` in the environment works as well, and a bare `nbcad-mcp` is looked up
-on the PATH. `probe:` (or `NBCAD_PRINT_PROBE`) overrides the packed print-probe
-binary with one you built yourself; it is not needed on the packed platforms.
-Check with `dsh --profile nbcad --dump-config` that the `nbcad-plate` entry is
-mounted.
+`probe:` (or `NBCAD_PRINT_PROBE`) overrides the packed print-probe binary with one
+you built yourself; it is not needed on the packed platforms. Check with
+`dsh --profile nbcad --dump-config` that the `nbcad-plate` entry is mounted.
 
 ## Use
 
@@ -134,19 +141,20 @@ runs.
 
 The plugin runs on Windows without extra tools; the `smoke` workflow exercises the
 host code and the packed `print-probe.exe` on `windows-latest` at every push.
-Point the engine setting at the `.exe` itself (a `.cmd` or `.bat` wrapper cannot
-be spawned), with forward slashes or a quoted string:
+The engine on Windows is the noBS CAD release itself: unzip
+`noBS-CAD-<version>-windows-x64.zip`, launch `noBS-CAD.exe` once normally (that
+registers the `nbcad://` handler the plugin reads), and the plugin finds it and
+starts it with `--headless` for each run. To pin it instead, name the `.exe`
+itself (a `.cmd` or `.bat` wrapper cannot be spawned), with forward slashes or a
+quoted string:
 
 ```yaml
 - id: nbcad-plate
   config:
-    server: C:/Users/me/noBS-CAD/mcp-server/target/debug/nbcad-mcp.exe
+    server: C:/Users/me/noBS-CAD/noBS-CAD.exe
 ```
 
-A bare `nbcad-mcp` is looked up on the PATH through `PATHEXT`. noBS CAD builds
-its MCP server on Windows with the vcpkg OpenCASCADE SDK (see its
-`mcp-server` workflow and `cargo xtask install-mcp`); the Windows desktop
-release is verified as an MCP package in noBS CAD's own CI.
+A bare name is looked up on the PATH through `PATHEXT`.
 
 The desktop detection reads `%TEMP%\nbcad-sessions\`, where the noBS CAD desktop
 publishes its heartbeats on Windows, and the probe caches page renders under

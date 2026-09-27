@@ -1,12 +1,13 @@
 // Platform smoke test: run on macOS, Linux and Windows without dsh or a noBS CAD build.
 //   node test/smoke.mjs
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkStep, inspectStep, runScript } from '../lib/cad.js'
-import { PLATFORM, PROBE_NAME, WINDOWS, findExecutable, insideDir, platformCandidates, safeName } from '../lib/host-utils.js'
+import { PLATFORM, PROBE_NAME, WINDOWS, discoverEngine, engineArgs, executableOfPid, findExecutable, insideDir, parseRegistryCommand, platformCandidates, runningDesktopPids, safeName } from '../lib/host-utils.js'
+import { spawn } from 'node:child_process'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tmp = mkdtempSync(join(tmpdir(), 'nbcad-smoke-'))
@@ -30,6 +31,29 @@ check('outside: parent traversal', !insideDir(ws, join(ws, '..', 'other.step')))
 check('safeName keeps Chinese names', safeName('图纸-01.pdf') === '图纸-01.pdf')
 check('safeName strips directories', safeName('../../etc/passwd') === 'passwd')
 check('platform candidates', platformCandidates('win32-arm64').includes('win32-x64'))
+
+// 2b. engine discovery: the application on the PATH gets --headless, nbcad-mcp does not, a running
+// desktop is found through its process record, the Windows registry value parses
+check('nbcad-mcp needs no flag', engineArgs('/x/nbcad-mcp').length === 0 && engineArgs('C:\\x\\nbcad-mcp.exe').length === 0)
+check('the application gets --headless', JSON.stringify(engineArgs('C:\\x\\noBS-CAD.exe')) === '["--headless"]')
+check('explicit serverArgs win', JSON.stringify(engineArgs('/x/nbcad', ['--headless', '--desktop'])) === '["--headless","--desktop"]')
+check('registry command parses', parseRegistryCommand('    (Default)    REG_SZ    "C:\\Apps\\noBS-CAD\\noBS-CAD.exe" "%1"') === 'C:\\Apps\\noBS-CAD\\noBS-CAD.exe')
+const appName = WINDOWS ? 'noBS-CAD.exe' : 'nbcad'
+const appDir = join(tmp, 'app-on-path'); mkdirSync(appDir, { recursive: true })
+writeFileSync(join(appDir, appName), WINDOWS ? '@echo off\r\n' : '#!/bin/sh\n', { mode: 0o755 })
+const viaPath = discoverEngine({}, { PATH: appDir, PATHEXT: '.EXE;.CMD;.BAT', NBCAD_SESSION_DIR: join(tmp, 'no-registry') }, process.platform)
+check('application found on the PATH with --headless', viaPath.source === 'path' && viaPath.path === join(appDir, appName) && viaPath.args[0] === '--headless', JSON.stringify(viaPath))
+const devFirst = discoverEngine({}, { PATH: tmp + (WINDOWS ? ';' : ':') + appDir, PATHEXT: '.EXE;.CMD;.BAT', NBCAD_SESSION_DIR: join(tmp, 'no-registry') }, process.platform)
+check('nbcad-mcp on the PATH wins over the application', devFirst.source === 'path' && devFirst.args.length === 0 && /nbcad-mcp/.test(devFirst.path), JSON.stringify(devFirst))
+const registry = join(tmp, 'registry'); mkdirSync(join(registry, '_ui', 'processes'), { recursive: true })
+const helper = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)'], { stdio: 'ignore' })
+writeFileSync(join(registry, '_ui', 'processes', 'test.json'), JSON.stringify({ pid: helper.pid, process_instance_id: 'test', updated_ms: Date.now(), windows: [] }))
+check('running desktop pid read from the registry', runningDesktopPids(registry).includes(helper.pid))
+const exe = executableOfPid(helper.pid)
+check('executable of a running pid resolved', exe !== null && existsSync(exe), String(exe))
+const viaDesktop = discoverEngine({}, { PATH: join(tmp, 'empty'), NBCAD_SESSION_DIR: registry }, process.platform)
+check('running desktop becomes the engine with --headless', viaDesktop.source === 'running desktop' && viaDesktop.path === exe && viaDesktop.args[0] === '--headless', JSON.stringify(viaDesktop))
+helper.kill()
 
 // 3. the engine helpers through a stand-in MCP server
 const fake = { path: process.execPath, args: [join(ROOT, 'test', 'fake-nbcad-mcp.mjs')] }
