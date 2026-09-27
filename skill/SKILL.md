@@ -218,6 +218,12 @@ numbers and anchor each hole to the end of its chain. The idioms are all in
 - Bolt circles, pitched rows and symmetric spans stay on the arithmetic of
   section 4 (or mix: a chain may start at a hole located by arithmetic). A
   dimension between two holes is a chain line from the first hole's end.
+- A chain anchors holes on the face its sketch lies on. Holes that start from
+  the bottom face (`背面` counterbores, back-face threads) keep the coordinate
+  idiom of section 5 with the bottom-face selector and z = 0; do not anchor
+  them to the top-face chains (the hole would start on the top plane and miss
+  the body) and do not reach for `flip`, which changes the drill direction,
+  not the face.
 - The chains stay in the file as a sketch a reviewer can open in noBS CAD and
   compare with the print line by line.
 - The run result's overlap and off-body warnings are not evaluated for anchored

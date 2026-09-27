@@ -1229,8 +1229,8 @@ fn crop_cmd(pdf: &str, page: u32, cal: &Cal, region: (f64, f64, f64, f64), dpi: 
     draw_holes(&mut cv, &to_px, holes, ppm, RED);
     write_png(out, cv.w, cv.h, &cv.rgb);
     format!(
-        "{{\"ok\":true,\"png\":\"{}\",\"size\":[{},{}],\"dpi\":{},\"px_per_mm\":{:.3},\"region_mm\":[{},{},{},{}],\"holes_drawn\":{},\"grid_mm\":{},\"legend\":\"red = model hole, blue = counterbore, green ticks every grid mm from the region corner (long tick and faint line every 5 ticks)\"}}",
-        out, cv.w, cv.h, dpi, ppm, region.0, region.1, region.2, region.3, holes.len(), grid
+        "{{\"ok\":true,\"png\":{},\"size\":[{},{}],\"dpi\":{},\"px_per_mm\":{:.3},\"region_mm\":[{},{},{},{}],\"holes_drawn\":{},\"grid_mm\":{},\"legend\":\"red = model hole, blue = counterbore, green ticks every grid mm from the region corner (long tick and faint line every 5 ticks)\"}}",
+        json_string(out), cv.w, cv.h, dpi, ppm, region.0, region.1, region.2, region.3, holes.len(), grid
     )
 }
 

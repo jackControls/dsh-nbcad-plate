@@ -1,6 +1,6 @@
 {
   "name": "dsh-nbcad-plate",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "description": "DeepSeek Harness plugin that turns 2D prints of flat plate parts into noBS CAD scripts and STEP files: one skill (the plate workflow), five tools (run a script and export STEP, inspect a STEP, check a feature table against it, overlay the model on the print, native print probe) and a \"2D → 3D\" panel in the Web UI that converts one PDF/PNG/JPG print and saves the STEP. No Python or system tools needed: the native print probe is packed for macOS, Linux and Windows.",
   "type": "module",
   "main": "lib/index.js",
