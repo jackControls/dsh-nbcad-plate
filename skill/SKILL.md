@@ -30,14 +30,15 @@ how many script runs you allow yourself.
   page fractions `"fx0,fy0,fx1,fy1"` (0 to 1 from the top-left corner) at any
   dpi: that is how you read the sheet. `info` gives the page count and size.
   The plate actions take `length_mm` and `width_mm`: `crop` writes a
-  millimetre window with a 10 mm tick grid, so a position can be read off the
-  ticks; `ring-score` says, for every hole of a STEP, what is drawn at that
-  point or within 2.5 mm (symbol with its centre and offset, dot, dashed,
-  none); `symbols` lists the circles and dots found in a region and which
-  model holes or drawn symbols are unmatched; `calibrate` reports the plate
-  outline and skew. Run `ring-score` after every script run and look at each
-  hole reported with an offset over 1 mm or nothing drawn. Treat `symbols`
-  output as places to look at on a crop, never as positions to model from.
+  millimetre window with a 10 mm tick grid, to see where a computed position
+  falls and which symbol a leader points at, never to measure a coordinate;
+  `ring-score` says, for every hole of a STEP, what is drawn at that point or
+  within 2.5 mm (symbol with its centre and offset, dot, dashed, none);
+  `symbols` lists the circles and dots found in a region and which model
+  holes or drawn symbols are unmatched; `calibrate` reports the plate outline
+  and skew. Run `ring-score` after every script run and look at each hole
+  reported with an offset over 1 mm or nothing drawn. Treat `symbols` output
+  as places to look at on a crop, never as positions to model from.
 - The example script `{{SKILL_DIR}}/plate-example.nbcad.jsonc` runs cleanly and
   shows every idiom below. Read it once, then copy its structure and change only
   the numbers and the list of feature steps.
@@ -47,12 +48,16 @@ how many script runs you allow yourself.
   common: 6.60 can look like 6 60). Pixel measurement is for disambiguation
   only, never a substitute for a printed number, and the title-block scale must
   not be used to measure anything.
-- A hole position comes from a printed dimension, or from the drawn hole symbol
-  (a small circle with a crosshair, or an X-marked circle for a tapped hole)
-  that you have seen on a crop at that spot. Never take positions from a circle
-  detector or a script you wrote over the raster without looking: digits,
-  characters, arrowheads and the ends of leaders are ring-shaped too, and a hole
-  placed on a callout's text is the most common error on dense prints.
+- The printed dimensions are the design; the drawing is not to scale and a
+  pixel is worth half a millimetre at best, with no tolerance in it. A hole
+  position comes from printed dimensions and the pattern rules of section 4,
+  never from measuring. The drawn hole symbol (a small circle with a crosshair,
+  or an X-marked circle for a tapped hole) tells you which hole a callout
+  belongs to and confirms a computed position; it is never the source of a
+  coordinate. Never take positions from a circle detector, from the tick grid,
+  or from a script you wrote over the raster: digits, characters, arrowheads
+  and the ends of leaders are ring-shaped too, and a hole placed on a callout's
+  text is the most common error on dense prints.
 
 ## 1. Survey the sheet
 
@@ -105,6 +110,14 @@ the thickness. Top face z = T, bottom face z = 0, side faces x = 0, x = L,
 y = 0, y = W. Every printed chain then converts directly.
 
 ## 4. Positions from chains, group by group
+
+Write the callout inventory and this chain table before any probe action other
+than `info`, `render` and `calibrate`; the pixel actions come after the numbers,
+to check them. Every coordinate in the table cites the printed dimensions it
+was computed from. When neither a printed dimension nor a pattern rule gives a
+coordinate, model the hole at the best reading you can defend and mark it
+UNCERTAIN (measured) with the alternatives; a measured value is never written
+up as a read one.
 
 - Chain from an edge: add the segments; partial chains must sum to the overall
   length or width, and a chain that ends on a hole gives that hole's coordinate.
@@ -165,7 +178,12 @@ JSON pointers start with `/`; numbers are plain JSON numbers.
 
 Run policy: a simple plate needs one run plus at most one correction. A dense
 plate may take up to five runs: run, read the failing step and reason, fix only
-that step, run again. After a successful run compare the returned hole list
+that step, run again. Probe budget: reading the sheet of a simple plate takes
+about ten renders, one calibrate, and after each script run one ring-score
+plus one overlay crop per hole region. Past thirty probe calls or twenty image
+views on a simple plate you are measuring instead of reading: stop, go back to
+the printed chains, and re-read them. A dense plate may need several times
+that, still group by group. After a successful run compare the returned hole list
 with the inventory (count per diameter, counterbores, edge holes appear as
 extra cylindrical faces), add whatever is missing, and run again. Do not
 declare the part done while a callout group is absent.
@@ -178,7 +196,11 @@ declare the part done while a callout group is absent.
 - `nbcad_inspect_step` on the exported STEP gives the same numbers.
 - Probe check after every script run: `nbcad_print_probe` with `ring-score`;
   every hole must come back as symbol, dot or dashed with an offset under 1 mm.
-  Then `symbols` on the whole plate: every print_only entry is a spot to view.
+  An offset over 1 mm means a chain was misread or the symbol belongs to
+  another group: re-read the printed dimension and fix the arithmetic; never
+  move the hole to the measured centre unless the print gives no dimension for
+  it, and then it is UNCERTAIN (measured) in the report. Then `symbols` on the
+  whole plate: every print_only entry is a spot to view.
 - Overlay check, mandatory before the report: run `nbcad_overlay_print` for the
   whole plate and view it, then run it with a `region` of roughly 250 × 200 mm
   for every part of the plate that holds holes and view each crop. Every red
