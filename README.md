@@ -66,8 +66,9 @@ brief and collects the files. The host half serves the panel's routes under
 
 ## Requirements
 
-- `dsh` 0.1.5 (release candidates included) with a profile based on `headless`,
-  `tui` or `web`; Node 22 or later.
+- `dsh` 0.1.5 to 0.1.9, alphas and release candidates included (the peer ranges
+  name each prerelease line explicitly, as node-semver requires), with a profile
+  based on `headless`, `tui` or `web`; Node 22 or later.
 - A noBS CAD build with the MCP server: `cargo build -p nbcad-mcp` in the noBS CAD
   checkout (the executable is `target/debug/nbcad-mcp`, `nbcad-mcp.exe` on Windows).
 
