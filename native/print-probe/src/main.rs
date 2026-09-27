@@ -350,7 +350,7 @@ impl Cal {
     }
     fn json(&self) -> String {
         format!(
-            "{{\"dpi\":{},\"tl\":[{},{}],\"tr\":[{},{}],\"bl\":[{},{}],\"br\":[{},{}],\"px_per_mm\":{:.4},\"skew_deg\":{:.3},\"outline_page_fraction\":[{:.3},{:.3},{:.3},{:.3}],\"paper_scale\":{:.3},\"scale_ratio\":{},\"check\":\"confirm on your page render that outline_page_fraction (x0,y0,x1,y1 from the top-left corner) is the plan-view outline and that scale_ratio agrees with the title block; if not, the length or width you gave is wrong and every result would be off\"}}",
+            "{{\"dpi\":{},\"tl\":[{},{}],\"tr\":[{},{}],\"bl\":[{},{}],\"br\":[{},{}],\"px_per_mm\":{:.4},\"skew_deg\":{:.3},\"outline_page_fraction\":[{:.3},{:.3},{:.3},{:.3}],\"paper_scale\":{:.3},\"scale_ratio\":{},\"check\":\"the outline must be the plan view's own edges: run calibrate with --out and view the picture (green box on the sheet), or compare outline_page_fraction (x0,y0,x1,y1 from the top-left corner) with where you saw the plan view; a box that reaches into the dimension chains, the edge view or a title-block cell means the length or width you gave is wrong and every later result would be off. scale_ratio is only a plausibility cue: copies are often rescaled, so it need not equal the title block\"}}",
             self.dpi, self.tl.0, self.tl.1, self.tr.0, self.tr.1, self.bl.0, self.bl.1, self.br.0, self.br.1, self.px_per_mm(), self.skew_deg(),
             self.tl.0.min(self.bl.0) / self.page_px.0 as f64, self.tl.1.min(self.tr.1) / self.page_px.1 as f64, self.tr.0.max(self.br.0) / self.page_px.0 as f64, self.bl.1.max(self.br.1) / self.page_px.1 as f64,
             self.paper_scale(), json_string(&self.scale_ratio())
@@ -542,6 +542,15 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
                     sorted.sort_by(|p, q| p.partial_cmp(q).unwrap());
                     let median = (widths[0] + widths[1]) / 2.0;
                     let strength = (cols[x0] + cols[x1] + rows[y0] + rows[y1]) as f64;
+                    if std::env::var("PROBE_DEBUG").map_or(false, |v| v == "3") {
+                        let xmid = (x0 + x1) / 2;
+                        let xthird = ((x1 - x0) / 3).max(4);
+                        let h0 = stroke_width(&g, y0, xmid - xthird, xmid + xthird, true, skew_band);
+                        let h1 = stroke_width(&g, y1, xmid - xthird, xmid + xthird, true, skew_band);
+                        let hq0 = stroke_width(&g, y0, x0 + end, x0 + end + xthird, true, skew_band);
+                        let hq1 = stroke_width(&g, y1, x0 + end, x0 + end + xthird, true, skew_band);
+                        eprintln!("  cand {x0}..{x1} x {y0}..{y1} span {span_x:.0} strength {strength:.0} v {:.1}/{:.1} h-mid {h0:.1}/{h1:.1} h-left {hq0:.1}/{hq1:.1} support l {left:.2} r {right:.2} ends {:?}", widths[0], widths[1], ends.iter().map(|v| (v * 100.0).round() / 100.0).collect::<Vec<_>>());
+                    }
                     if dbg {
                         eprintln!("  expected: left {left:.2} right {right:.2} ends {:?} widths {widths:?} median {median} strength {strength}", ends.iter().map(|v| (v * 100.0).round() / 100.0).collect::<Vec<_>>());
                     }
@@ -549,6 +558,27 @@ fn calibrate(pdf: &str, page: u32, length: f64, width: f64) -> Cal {
                         continue;
                     }
                     if median < 2.0 || median > 8.0 {
+                        continue;
+                    }
+                    // The horizontal sides must be visible lines too: a box closed by a dimension
+                    // line (half the weight of the outline) is the dimension chain above or below
+                    // the plate, drawn between the plate's own extension lines. Three windows per
+                    // side, gaps (notches) and non-line ink (text, hatching) ignored.
+                    let xthird = ((x1 - x0) / 3).max(8);
+                    let horizontal_weight = |y: usize| -> f64 {
+                        let mut widths: Vec<f64> = [x0 + end, (x0 + x1) / 2 - xthird / 2, x1.saturating_sub(end + xthird)]
+                            .iter()
+                            .map(|&lo| stroke_width(&g, y, lo.max(x0), (lo + xthird).min(x1), true, skew_band))
+                            .filter(|w| *w > 0.0 && *w <= 12.0)
+                            .collect();
+                        widths.sort_by(|p, q| p.partial_cmp(q).unwrap());
+                        widths.get(widths.len() / 2).copied().unwrap_or(0.0)
+                    };
+                    let (h_top, h_bottom) = (horizontal_weight(y0), horizontal_weight(y1));
+                    if dbg {
+                        eprintln!("  expected: horizontal weights top {h_top:.1} bottom {h_bottom:.1} against vertical median {median:.1}");
+                    }
+                    if h_top < 0.6 * median || h_bottom < 0.6 * median {
                         continue;
                     }
                     cands.push((strength, span_x, x0, x1, y0, y1, sorted[0], median));
@@ -1112,6 +1142,27 @@ const GREEN: [u8; 3] = [0, 160, 0];
 const MAGENTA: [u8; 3] = [200, 0, 200];
 const ORANGE: [u8; 3] = [230, 120, 0];
 
+/// The whole sheet at 72 dpi with the calibrated outline drawn in green: one look tells whether
+/// the box is the plan view's own edges or a dimension chain, the edge view or a title-block cell.
+fn calibration_picture(print: &str, page: u32, cal: &Cal, out: &str) -> (usize, usize) {
+    const PICTURE_DPI: u32 = 72;
+    let g = render_page(print, PICTURE_DPI, page);
+    let mut cv = Canvas::from_gray(&g);
+    let k = PICTURE_DPI as f64 / cal.dpi as f64;
+    let corners = [cal.tl, cal.tr, cal.br, cal.bl, cal.tl].map(|(x, y)| (x * k, y * k));
+    for pair in corners.windows(2) {
+        for d in -1..=1 {
+            let (a, b) = (pair[0], pair[1]);
+            cv.line((a.0 + d as f64, a.1 + d as f64), (b.0 + d as f64, b.1 + d as f64), GREEN);
+        }
+    }
+    for (x, y) in &corners[..4] {
+        cv.circle(*x, *y, 6.0, GREEN, 2);
+    }
+    write_png(out, cv.w, cv.h, &cv.rgb);
+    (cv.w, cv.h)
+}
+
 /// Pixel bounds of a millimetre region at `dpi`.
 fn region_px(cal: &Cal, dpi: u32, region: (f64, f64, f64, f64)) -> (i64, i64, i64, i64) {
     let m = cal.to_px(dpi, (0.0, 0.0));
@@ -1378,7 +1429,13 @@ fn main() {
             let width = number(&args, "--width").unwrap_or_else(|| fail(&format!("{cmd} needs --length and --width")));
             let cal = calibrate(&print, page, length, width);
             match cmd {
-                "calibrate" => format!("{{\"ok\":true,\"calibration\":{}}}", cal.json()),
+                "calibrate" => match arg(&args, "--out") {
+                    Some(out) => {
+                        let (w, h) = calibration_picture(&print, page, &cal, &out);
+                        format!("{{\"ok\":true,\"calibration\":{},\"png\":{},\"png_size\":[{w},{h}],\"legend\":\"green = the outline the calibration found, drawn on the whole sheet at 72 dpi; it must sit exactly on the plan view's edges\"}}", cal.json(), json_string(&out))
+                    }
+                    None => format!("{{\"ok\":true,\"calibration\":{}}}", cal.json()),
+                },
                 "crop" => {
                     let region = parse_region(&arg(&args, "--region").unwrap_or_else(|| fail("crop needs --region")));
                     let dpi = number(&args, "--dpi").unwrap_or(400.0) as u32;

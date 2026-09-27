@@ -66,13 +66,16 @@ side view (thickness, holes drilled into edges) and any section view. Note part
 name, material and the technical notes (edge breaks, plating, finish) for the
 report; they are not geometry.
 
-Read the outline length and width from their printed dimensions, then run
-`calibrate` with them and check two things in its answer: that
-`outline_page_fraction` is the plan-view outline you saw on the page render
-(not a band inside it, a section view or a title-block cell), and that
-`scale_ratio` agrees with the scale in the title block. If either is off, the
-length or width you gave is wrong: re-read them before doing anything else,
-because every crop, ring-score and overlay is measured from this calibration.
+Read the outline length and width from the printed overall dimensions of the
+plan view (the longest chain along each edge, for example `920` and `410`),
+never from the title block and never by measuring. Then run `calibrate` with
+them and `out_png`, and view the picture it writes: the green box must sit
+exactly on the plan view's own edges. A box that reaches up into the dimension
+chains, that covers the edge view, or that sits on a title-block cell means
+the length or width you gave is wrong: re-read the overall dimensions before
+doing anything else, because every crop, ring-score and overlay is measured
+from this calibration. `scale_ratio` is only a plausibility cue; copies are
+often rescaled, so it need not equal the title block.
 
 Counterbore direction: a solid double circle in the plan view is visible from
 the front, so the counterbore is on the top face; a dashed circle or a `背面`
