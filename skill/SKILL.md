@@ -1,5 +1,5 @@
 ---
-name: nbcad-plate
+name: nobs-cad-step
 description: Turn a 2D engineering print of a flat plate part (simple or dense: notches, slots, through, counterbored, blind, tapped and edge-drilled holes, bolt circles) into a noBS CAD script and a STEP file. Load before any CAD work on a plate print.
 ---
 

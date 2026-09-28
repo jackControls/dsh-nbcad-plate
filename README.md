@@ -1,4 +1,8 @@
-# dsh-nbcad-plate
+# dsh-noBS-CAD-step
+
+npm package `dsh-nobs-cad-step`, plugin id `nobs-cad-step`. Renamed on 2026-09-28
+from `dsh-nbcad-plate` (plugin id `nbcad-plate`): remove the old package from a
+profile before adding this one, and rename the `id` in any config override.
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/dsh) (`dsh`) plugin that turns
 2D engineering prints of flat plate parts into [noBS CAD](https://github.com/jackControls/noBS-CAD)
@@ -6,7 +10,7 @@ scripts and STEP files.
 
 It registers:
 
-- the skill `nbcad-plate`: the standard workflow for plate parts, from a
+- the skill `nobs-cad-step`: the standard workflow for plate parts, from a
   ten-hole bracket to a dense plate with eighty holes (sheet survey, callout
   inventory, corner-origin frame, chain arithmetic, one script per part,
   verification by hole counts, report), with two validated example scripts:
@@ -97,13 +101,13 @@ the template to get the panel):
 
 ```bash
 dsh --profile nbcad --from-default-profile headless --dump-config >/dev/null
-dsh plugin --profile nbcad add github:jackControls/dsh-nbcad-plate
+dsh plugin --profile nbcad add github:jackControls/dsh-nobs-cad-step
 ```
 
 Or from a local checkout:
 
 ```bash
-dsh plugin --profile nbcad add file:/path/to/dsh-nbcad-plate
+dsh plugin --profile nbcad add file:/path/to/dsh-nobs-cad-step
 ```
 
 The engine is found automatically, in this order: `config.server` or `NBCAD_MCP`;
@@ -115,7 +119,7 @@ status strip says which one it uses. To pin it, set it in the profile's
 `cordis.patch.yml` (`~/.dsh/profiles/nbcad/cordis.patch.yml`):
 
 ```yaml
-- id: nbcad-plate
+- id: nobs-cad-step
   config:
     server: /Applications/noBS CAD.app/Contents/MacOS/nbcad   # or .../nbcad-mcp
     # serverArgs: ['--headless']   # the default for the application; none for nbcad-mcp
@@ -123,14 +127,14 @@ status strip says which one it uses. To pin it, set it in the profile's
 
 `probe:` (or `NBCAD_PRINT_PROBE`) overrides the packed print-probe binary with one
 you built yourself; it is not needed on the packed platforms. Check with
-`dsh --profile nbcad --dump-config` that the `nbcad-plate` entry is mounted.
+`dsh --profile nbcad --dump-config` that the `nobs-cad-step` entry is mounted.
 
 ## Use
 
 From a workspace that contains the print:
 
 ```bash
-dsh --profile nbcad "Model scratch/PART.pdf as a STEP file. Load the nbcad-plate skill first."
+dsh --profile nbcad "Model scratch/PART.pdf as a STEP file. Load the nobs-cad-step skill first."
 ```
 
 The skill asks for the script, the STEP file, a feature table and a short report
@@ -149,7 +153,7 @@ itself (a `.cmd` or `.bat` wrapper cannot be spawned), with forward slashes or a
 quoted string:
 
 ```yaml
-- id: nbcad-plate
+- id: nobs-cad-step
   config:
     server: C:/Users/me/noBS-CAD/noBS-CAD.exe
 ```
@@ -202,5 +206,5 @@ run, `gh run download <run-id> -D dist` and copy each `dist/print-probe-<platfor
 into `bin/<platform>/`.
 
 After editing the plugin, refresh the installed copy with
-`dsh plugin --profile nbcad update dsh-nbcad-plate` (or remove and add again;
+`dsh plugin --profile nbcad update dsh-nobs-cad-step` (or remove and add again;
 bump the version first, a re-add of the same version keeps the old copy).

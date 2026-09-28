@@ -1,4 +1,4 @@
-//! print-probe: pixel tools for plate prints, built for the nbcad-plate workflow.
+//! print-probe: pixel tools for plate prints, built for the nobs-cad-step workflow.
 //!
 //! The print is a PDF (rendered here, no external tools), a PNG or a JPG. The page
 //! commands work on the sheet; the plate commands take the plate size and work in plate
