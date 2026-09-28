@@ -1,5 +1,7 @@
 # Builds the print-probe binary for every platform the plugin packs under bin/<platform>/.
-# Download the artifacts of a run with `gh run download <run-id> -D dist` and copy them into bin/.
+# Download the artifacts of a run with `gh run download <run-id> -D dist`, copy them into bin/, then run
+# `node tools/probe-sums.mjs` (the manifest the host checks) and `gh attestation verify bin/<platform>/print-probe
+# --repo jackControls/dsh-noBS-CAD-step` (every build here is attested).
 name: probe binaries
 
 on:
@@ -8,6 +10,11 @@ on:
     paths:
       - 'native/print-probe/**'
       - '.github/workflows/probe-binaries.yml'
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -38,6 +45,13 @@ jobs:
           mkdir -p dist/${{ matrix.platform }}
           cp native/print-probe/target/${{ matrix.target }}/release/print-probe${{ matrix.exe }} dist/${{ matrix.platform }}/
           ls -la dist/${{ matrix.platform }}
+      - name: Checksum
+        shell: bash
+        run: node -e "const c=require('node:crypto'),f=require('node:fs');const p=process.argv[1];console.log(c.createHash('sha256').update(f.readFileSync(p)).digest('hex')+'  '+p)" dist/${{ matrix.platform }}/print-probe${{ matrix.exe }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/${{ matrix.platform }}/print-probe${{ matrix.exe }}
       - uses: actions/upload-artifact@v4
         with:
           name: print-probe-${{ matrix.platform }}

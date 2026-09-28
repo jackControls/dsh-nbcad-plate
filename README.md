@@ -77,6 +77,14 @@ Nothing here bypasses the model: the panel only prepares the workspace, sends th
 brief and collects the files. The host half serves the panel's routes under
 `/dsh-nbcad/api` on dsh's own web server; headless profiles do not mount them.
 
+What the routes accept: every request must carry a secret that is new on each
+boot; dsh writes it into the page and the panel sends it back, so other pages in
+the browser and other processes on the machine get `401`. The workspace named
+in a request must be one registered in dsh; nothing outside a registered
+workspace is listed, read or written. dsh's web server binds to `127.0.0.1`
+unless configured otherwise, and the routes still assume a local, single-user
+machine.
+
 ## Requirements
 
 - `dsh` 0.1.5 to 0.1.9, alphas and release candidates included (the peer ranges
@@ -93,6 +101,26 @@ as a binary under `bin/` for macOS (Apple silicon and Intel), Linux (x64 and
 arm64) and Windows (x64), and it renders PDFs and decodes PNG and JPG prints
 itself.
 
+`bin/SHA256SUMS` lists the packed probe binaries. A packed binary that is not
+listed or does not match is refused (the status strip says why) and the plugin
+falls back to `config.probe`, `NBCAD_PRINT_PROBE`, a local `cargo build
+--release` under `native/print-probe`, or `print-probe` on the PATH. Builds from
+the `probe binaries` workflow carry a GitHub provenance attestation:
+`gh attestation verify bin/darwin-arm64/print-probe --repo jackControls/dsh-noBS-CAD-step`.
+
+The engine is checked on every session: its `cad_interface` tool must offer the
+`script`, `summary` and `check` actions (noBS CAD 0.2.1 or newer), otherwise the
+tools fail with a clear message instead of halfway through a run.
+
+Limits of the readings: `nbcad_run_script`, `nbcad_inspect_step` and
+`nbcad_check` take holes from the vertical cylindrical faces reported by the
+engine that built the model (centres grouped within 0.3 mm, the smallest radius
+is the hole, the largest a counterbore). Chamfered or tapered holes, filleted
+hole edges, slots and angled holes are not holes to them, and an engine mistake
+looks the same on both sides of a check. The print is the independent check:
+`ring-score`, `symbols` and `nbcad_overlay_print` compare the model with the
+drawing itself.
+
 ## Install
 
 From GitHub into a profile of your own (the plugin is plain JavaScript plus the
@@ -101,7 +129,7 @@ the template to get the panel):
 
 ```bash
 dsh --profile nbcad --from-default-profile headless --dump-config >/dev/null
-dsh plugin --profile nbcad add github:jackControls/dsh-nobs-cad-step
+dsh plugin --profile nbcad add github:jackControls/dsh-noBS-CAD-step
 ```
 
 Or from a local checkout:
@@ -169,7 +197,8 @@ script (Chinese file names are kept as they are).
 ## Layout
 
 ```
-lib/index.js             plugin entry: skill, the four tools, the panel's web routes
+lib/index.js             plugin entry: skill, the five tools, engine and probe discovery
+lib/routes.js            the panel's web routes (per-boot secret, registered workspaces only)
 lib/cad.js               engine helpers: run a script, export STEP, inspect a STEP, summarise
 lib/mcp-client.js        newline JSON-RPC client for nbcad-mcp (plain Node)
 lib/client.js            the "2D → 3D" panel (browser half)

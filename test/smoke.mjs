@@ -1,12 +1,14 @@
 // Platform smoke test: run on macOS, Linux and Windows without dsh or a noBS CAD build.
 //   node test/smoke.mjs
 import { execFileSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkStep, inspectStep, runScript } from '../lib/cad.js'
-import { PLATFORM, PROBE_NAME, WINDOWS, discoverEngine, engineArgs, executableOfPid, findExecutable, insideDir, parseRegistryCommand, platformCandidates, runningDesktopPids, safeName } from '../lib/host-utils.js'
+import { createRouteHandler } from '../lib/routes.js'
+import { PLATFORM, PROBE_NAME, WINDOWS, discoverEngine, engineArgs, executableOfPid, findExecutable, insideDir, parseRegistryCommand, platformCandidates, runningDesktopPids, safeName, readProbeManifest, verifyPackedProbe } from '../lib/host-utils.js'
 import { spawn } from 'node:child_process'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -107,5 +109,48 @@ if (probe) {
   const symbols = probeJson(['symbols', '--print', print, '--length', '200', '--width', '100', '--out', join(tmp, 'symbols.png')]); check('probe symbols with a picture', symbols.ok === true && existsSync(join(tmp, 'symbols.png')), JSON.stringify(symbols).slice(0, 160))
   const missing = probeJson(['info', '--print', join(tmp, 'nope.pdf')]); check('probe reports a missing file as JSON', missing.ok === false && /cannot read/.test(missing.error), JSON.stringify(missing))
 }
+// 6. every packed binary is the one bin/SHA256SUMS names (the host refuses any other)
+{
+  const binDir = join(ROOT, 'bin')
+  const manifest = readProbeManifest(binDir)
+  check('bin/SHA256SUMS present', manifest !== null && manifest.size >= 5, String(manifest?.size))
+  for (const key of manifest?.keys() ?? []) {
+    const [platform, name] = key.split('/')
+    const verdict = verifyPackedProbe(binDir, platform, name)
+    check(`packed probe matches the manifest: ${key}`, verdict.ok === true, verdict.reason ?? '')
+  }
+  check('a tampered binary is refused', verifyPackedProbe(tmp, 'nowhere', 'print-probe').ok === false)
+}
+
+// 7. the panel routes: no secret → 401; a directory dsh has not registered → 400; inside a
+// registered workspace, outputs list, files download and prints upload; nothing else is readable
+{
+  const token = 'smoke-secret'
+  const ws = join(tmp, 'registered')
+  mkdirSync(join(ws, 'out'), { recursive: true })
+  writeFileSync(join(ws, 'out', 'part.step'), 'ISO-10303-21;')
+  writeFileSync(join(tmp, 'outside.md'), 'not yours')
+  const handler = createRouteHandler({ token, workspaces: () => [ws], status: () => ({ ok: true, smoke: true }) })
+  const server = createServer((req, res) => { handler(req, res) })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const base = `http://127.0.0.1:${server.address().port}/dsh-nbcad/api`
+  const auth = { 'x-nbcad-panel-token': token }
+  const q = (v) => encodeURIComponent(v)
+  check('routes: no token → 401', (await fetch(`${base}/status`)).status === 401)
+  check('routes: wrong token → 401', (await fetch(`${base}/status`, { headers: { 'x-nbcad-panel-token': 'smoke-secreT' } })).status === 401)
+  check('routes: token → status', (await (await fetch(`${base}/status`, { headers: auth })).json()).smoke === true)
+  check('routes: unregistered directory → 400', (await fetch(`${base}/outputs?dir=${q(tmp)}`, { headers: auth })).status === 400)
+  const outputs = await (await fetch(`${base}/outputs?dir=${q(ws)}`, { headers: auth })).json()
+  check('routes: registered workspace lists its outputs', outputs.ok === true && outputs.files.some((f) => f.name === 'part.step' && f.kind === 'step'), JSON.stringify(outputs).slice(0, 160))
+  check('routes: file outside the workspace → 400', (await fetch(`${base}/file?dir=${q(ws)}&path=${q(join(tmp, 'outside.md'))}`, { headers: auth })).status === 400)
+  const download = await fetch(`${base}/file?dir=${q(ws)}&path=${q(join(ws, 'out', 'part.step'))}`, { headers: auth })
+  check('routes: file inside the workspace downloads', download.status === 200 && (await download.text()) === 'ISO-10303-21;')
+  const upload = await (await fetch(`${base}/print?dir=${q(ws)}&name=${q('图纸.pdf')}`, { method: 'POST', headers: auth, body: '%PDF-1.4 smoke' })).json()
+  check('routes: print upload lands in <workspace>/prints', upload.ok === true && existsSync(join(ws, 'prints', '图纸.pdf')), JSON.stringify(upload))
+  check('routes: upload into an unregistered directory → 400', (await fetch(`${base}/print?dir=${q(tmp)}&name=a.pdf`, { method: 'POST', headers: auth, body: 'x' })).status === 400)
+  check('routes: unknown route → 404', (await fetch(`${base}/nope`, { headers: auth })).status === 404)
+  server.close()
+}
+
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed', 'on', PLATFORM)
 process.exit(failures ? 1 : 0)

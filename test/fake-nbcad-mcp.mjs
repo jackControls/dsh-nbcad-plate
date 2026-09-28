@@ -26,7 +26,7 @@ rl.on('line', (line) => {
   if (m.id === undefined) return
   let result
   if (m.method === 'initialize') result = { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'fake', version: '0' } }
-  else if (m.method === 'tools/list') result = { tools: Object.keys(answers).map((name) => ({ name })) }
+  else if (m.method === 'tools/list') result = { tools: Object.keys(answers).map((name) => (name === 'cad_interface' ? { name, inputSchema: { type: 'object', properties: { action: { enum: ['script', 'summary', 'check', 'export_script'] } } } } : { name })) }
   else if (m.method === 'tools/call') {
     const fn = answers[m.params.name]
     result = fn ? { content: [{ type: 'text', text: JSON.stringify(fn(m.params.arguments || {})) }] } : { isError: true, content: [{ type: 'text', text: 'no such tool' }] }

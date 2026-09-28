@@ -22,6 +22,12 @@ how many script runs you allow yourself.
   holes, holes off the body, blind depths deeper than the body, unused
   bindings. Read every warning; a warning is a mistake to fix, not a note.
 - `nbcad_inspect_step(step_path)` re-imports a STEP and returns the same summary.
+- Limits of these readings: holes come from the vertical cylindrical faces the
+  same engine reports (centres grouped within 0.3 mm; smallest radius = hole,
+  largest = counterbore). Chamfered or tapered holes, filleted hole edges, slots
+  and angled holes are not holes to them, and an engine mistake shows the same
+  way on both sides of `nbcad_check`. The print is the independent check: use
+  `ring-score`, `symbols` and `nbcad_overlay_print` before you trust a count.
 - `nbcad_check(step_path, expected, tolerance_mm?)` compares your feature
   table (`{bbox: [L, W, T], holes: [{x, y, diameter, counterbore_diameter?,
   through?, depth?}]}`) with the built STEP through the engine and lists the
