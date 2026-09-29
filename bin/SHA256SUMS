@@ -1,0 +1,7 @@
+# sha256 of the packed print-probe binaries, one per bin/<platform>/. Rewrite with
+# `node tools/probe-sums.mjs` after copying a CI build into bin/; check with `--check`.
+f54867d131427e1e0c929f600f2c65035837ec59f733a1974f6e3af8d608d88e  darwin-arm64/print-probe
+17571e558bcec08659adf5380f2a420f216e116bf9d2702b53d496c6b5ccbdaf  darwin-x64/print-probe
+0362e6599dc7ed8d77d221753e5e91794d1833b3f3c2564f6990d5756c35df85  linux-arm64/print-probe
+5a38a48249d97e7ba823c6f3c1600382ec8d0274852606e4699c00c71418fccb  linux-x64/print-probe
+33ff330f4185d0346576d3e9c3748b16b5a286ab13bbb4b07cdd468af58d139b  win32-x64/print-probe.exe
