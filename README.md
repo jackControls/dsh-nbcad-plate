@@ -87,9 +87,15 @@ machine.
 
 ## Requirements
 
-- `dsh` 0.1.5 to 0.1.9, alphas and release candidates included (the peer ranges
+- `dsh` 0.1.5 to 0.2.0, alphas and release candidates included (the peer ranges
   name each prerelease line explicitly, as node-semver requires), with a profile
-  based on `headless`, `tui` or `web`; Node 22 or later.
+  based on `headless`, `tui` or `web`; Node 22 or later. On the 0.2 line the
+  panel's client half pulls the services it needs from the runtime's own
+  packages (ui-renderer owns `slots`, ui-layout owns `layout` and the `main`
+  panel slot, ui-sidebar owns `sidebar.panellist`, ui-workspace owns
+  `uiWorkspace`, the api-controllers own `sessions` and `workspaces`), which
+  `dsh.client.inject` names; a name a given runtime does not ship is ignored by
+  the client module graph.
 - noBS CAD. The application itself serves stdio MCP: the plugin starts it with
   `--headless`, so an installed noBS CAD (the release zip on Windows, the app on
   macOS, the deb on Linux) is the engine. A developer build of `nbcad-mcp`
