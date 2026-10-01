@@ -1,6 +1,6 @@
 {
   "name": "dsh-nobs-cad-step",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "DeepSeek Harness plugin that turns 2D prints of flat plate parts into noBS CAD scripts and STEP files: one skill (the plate workflow), five tools (run a script and export STEP, inspect a STEP, check a feature table against it, overlay the model on the print, native print probe) and a \"2D → 3D\" panel in the Web UI that converts one PDF/PNG/JPG print and saves the STEP. No Python or system tools needed: the native print probe is packed for macOS, Linux and Windows.",
   "type": "module",
   "main": "lib/index.js",
@@ -37,8 +37,8 @@
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1 <0.2.0-0 || >=0.1.6-0 <0.2.0-0 || >=0.1.7-0 <0.2.0-0 || >=0.1.8-0 <0.2.0-0 || >=0.1.9-0 <0.2.0-0",
-    "@deepseek-ai/dsh-skill": ">=0.1.5-rc.1 <0.2.0-0 || >=0.1.6-0 <0.2.0-0 || >=0.1.7-0 <0.2.0-0 || >=0.1.8-0 <0.2.0-0 || >=0.1.9-0 <0.2.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1 <0.2.0-0 || >=0.1.6-0 <0.2.0-0 || >=0.1.7-0 <0.2.0-0 || >=0.1.8-0 <0.2.0-0 || >=0.1.9-0 <0.2.0-0 || >=0.2.0-0 <0.3.0-0",
+    "@deepseek-ai/dsh-skill": ">=0.1.5-rc.1 <0.2.0-0 || >=0.1.6-0 <0.2.0-0 || >=0.1.7-0 <0.2.0-0 || >=0.1.8-0 <0.2.0-0 || >=0.1.9-0 <0.2.0-0 || >=0.2.0-0 <0.3.0-0",
     "@deepseek-ai/schemastery": "^3.18.2"
   },
   "dsh": {
@@ -48,10 +48,14 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
